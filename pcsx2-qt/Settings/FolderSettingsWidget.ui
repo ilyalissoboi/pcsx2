@@ -249,6 +249,52 @@
     </widget>
    </item>
    <item>
+    <widget class="QGroupBox" name="shadersGroup">
+     <property name="title">
+      <string>Shaders Directory</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_shaders">
+      <item row="1" column="0">
+       <widget class="QLineEdit" name="shaders"/>
+      </item>
+      <item row="1" column="1">
+       <widget class="QPushButton" name="shadersBrowse">
+        <property name="text">
+         <string>Browse...</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="2">
+       <widget class="QPushButton" name="shadersOpen">
+        <property name="text">
+         <string>Open...</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="3">
+       <widget class="QPushButton" name="shadersReset">
+        <property name="text">
+         <string>Reset</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0" colspan="4">
+       <widget class="QLabel" name="shadersLabel">
+        <property name="text">
+         <string>Used for storing RetroArch slang shader presets and shader packs for the post-processing shader chain.</string>
+        </property>
+        <property name="textInteractionFlags">
+         <set>Qt::TextInteractionFlag::TextBrowserInteraction</set>
+        </property>
+        <property name="buddy">
+         <cstring>shaders</cstring>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <widget class="QGroupBox" name="videoDumpDirectory">
      <property name="title">
       <string>Video Recording Directory</string>
