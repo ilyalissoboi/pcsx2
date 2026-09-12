@@ -6,6 +6,12 @@
 #include "GS/Renderers/Metal/GSMetalCPPAccessible.h"
 #include "GS/Renderers/Metal/GSDeviceMTL.h"
 #include "GS/Renderers/Metal/GSTextureMTL.h"
+#define LIBRA_RUNTIME_METAL
+#include "librashader.h"
+#include "GS/ShaderChain/LibrashaderLoader.h"
+#include "GS/ShaderChain/ShaderPresets.h"
+#include "IconsFontAwesome.h"
+#include "fmt/format.h"
 #include "GS/GSPerfMon.h"
 #include "GS/GSShaderCompileIndicator.h"
 
@@ -1345,6 +1351,7 @@ bool GSDeviceMTL::Create(GSVSyncMode vsync_mode, bool allow_present_throttle)
 void GSDeviceMTL::Destroy()
 { @autoreleasepool {
 	FlushEncoders();
+	ReleaseShaderChain();
 	std::lock_guard<std::mutex> guard(m_backref->first);
 	m_backref->second = nullptr;
 
@@ -2823,5 +2830,151 @@ void GSDeviceMTL::RenderImGui(ImDrawData* data)
 
 	[enc popDebugGroup];
 }
+
+struct GSDeviceMTL::ShaderChainFunctions
+{
+	PFN_libra_mtl_filter_chain_create create = nullptr;
+	PFN_libra_mtl_filter_chain_frame frame = nullptr;
+	PFN_libra_mtl_filter_chain_set_param set_param = nullptr;
+	PFN_libra_mtl_filter_chain_free free = nullptr;
+
+	bool Load()
+	{
+		create = reinterpret_cast<PFN_libra_mtl_filter_chain_create>(ShaderChain::GetSymbol("libra_mtl_filter_chain_create"));
+		frame = reinterpret_cast<PFN_libra_mtl_filter_chain_frame>(ShaderChain::GetSymbol("libra_mtl_filter_chain_frame"));
+		set_param = reinterpret_cast<PFN_libra_mtl_filter_chain_set_param>(ShaderChain::GetSymbol("libra_mtl_filter_chain_set_param"));
+		free = reinterpret_cast<PFN_libra_mtl_filter_chain_free>(ShaderChain::GetSymbol("libra_mtl_filter_chain_free"));
+		return create && frame && set_param && free;
+	}
+};
+
+static const GSDeviceMTL::ShaderChainFunctions& GetMTLShaderChainFunctions()
+{
+	static GSDeviceMTL::ShaderChainFunctions s_fns;
+	static bool s_loaded = s_fns.Load();
+	(void)s_loaded;
+	return s_fns;
+}
+
+void GSDeviceMTL::ReleaseShaderChain()
+{ @autoreleasepool {
+	if (!m_shader_chain)
+	{
+		m_shader_chain_loaded_path.clear();
+		m_shader_chain_failed = false;
+		return;
+	}
+	FlushEncoders(); // any encoded chain passes must be committed before the chain goes away
+	auto chain = static_cast<libra_mtl_filter_chain_t>(m_shader_chain);
+	GetMTLShaderChainFunctions().free(&chain);
+	m_shader_chain = nullptr;
+	m_shader_chain_loaded_path.clear();
+	m_shader_chain_failed = false;
+}}
+
+bool GSDeviceMTL::EnsureShaderChain(const ShaderChainFunctions& fns)
+{
+	const std::string& wanted = GetShaderChainPresetPath();
+	if (m_shader_chain && m_shader_chain_loaded_path == wanted)
+		return true;
+	if (m_shader_chain_failed && m_shader_chain_loaded_path == wanted)
+		return false;
+
+	ReleaseShaderChain();
+	m_shader_chain_loaded_path = wanted;
+
+	const ShaderChain::CommonFunctions& c = ShaderChain::Common();
+	libra_preset_ctx_t ctx = nullptr;
+	libra_shader_preset_t preset = nullptr;
+	libra_error_t err = c.preset_ctx_create(&ctx);
+	if (!err) err = c.preset_ctx_set_runtime(&ctx, LIBRA_PRESET_CTX_RUNTIME_METAL);
+	if (!err) err = c.preset_ctx_set_core_name(&ctx, "PCSX2");
+	if (!err) err = c.preset_create_with_options(wanted.c_str(), &ctx, nullptr, &preset);
+	if (err)
+	{
+		const std::string msg = ShaderChain::DescribeAndFreeError(err);
+		if (ctx) c.preset_ctx_free(&ctx);
+		Host::AddIconOSDMessage("ShaderChain", ICON_FA_TRIANGLE_EXCLAMATION,
+			fmt::format(TRANSLATE_FS("GS", "Failed to load shader preset: {}"), msg), Host::OSD_ERROR_DURATION);
+		ERROR_LOG("ShaderChain(MTL): preset load failed for {}: {}", wanted, msg);
+		m_shader_chain_failed = true;
+		return false;
+	}
+
+	filter_chain_mtl_opt_t opt = {};
+	opt.version = LIBRASHADER_CURRENT_VERSION;
+	opt.force_no_mipmaps = false;
+
+	libra_mtl_filter_chain_t chain = nullptr;
+	err = fns.create(&preset, m_queue, &opt, &chain);
+	if (err)
+	{
+		const std::string msg = ShaderChain::DescribeAndFreeError(err);
+		Host::AddIconOSDMessage("ShaderChain", ICON_FA_TRIANGLE_EXCLAMATION,
+			fmt::format(TRANSLATE_FS("GS", "Failed to compile shader preset: {}"), msg), Host::OSD_ERROR_DURATION);
+		ERROR_LOG("ShaderChain(MTL): chain create failed for {}: {}", wanted, msg);
+		m_shader_chain_failed = true;
+		return false;
+	}
+
+	m_shader_chain = chain;
+	m_shader_chain_params_generation = 0;
+	INFO_LOG("ShaderChain(MTL): loaded {}", wanted);
+	return true;
+}
+
+void GSDeviceMTL::ApplyShaderChainParams(const ShaderChainFunctions& fns)
+{
+	ShaderPresets::ParameterStore& store = ShaderPresets::Params();
+	if (store.GetGeneration() == m_shader_chain_params_generation)
+		return;
+
+	std::string preset;
+	ShaderPresets::ParameterStore::ParamList params;
+	m_shader_chain_params_generation = store.Snapshot(&preset, &params);
+	if (preset != GSConfig.ShaderChainPreset)
+		return;
+
+	auto chain = static_cast<libra_mtl_filter_chain_t>(m_shader_chain);
+	for (const auto& [name, value] : params)
+	{
+		if (libra_error_t err = fns.set_param(&chain, name.c_str(), value))
+			ShaderChain::DescribeAndFreeError(err);
+	}
+}
+
+bool GSDeviceMTL::DoApplyShaderChain(GSTexture* sTex, GSTexture* dTex, u64 frame_count)
+{ @autoreleasepool {
+	const ShaderChainFunctions& fns = GetMTLShaderChainFunctions();
+	if (!fns.create || !EnsureShaderChain(fns))
+		return false;
+
+	ApplyShaderChainParams(fns);
+
+	GSTextureMTL* const src = static_cast<GSTextureMTL*>(sTex);
+	GSTextureMTL* const dst = static_cast<GSTextureMTL*>(dTex);
+	src->FlushClears();
+	dst->FlushClears();
+
+	// Metal aborts if we hand over a command buffer with an open encoder.
+	EndRenderPass();
+
+	const libra_viewport_t vp = {0.0f, 0.0f, static_cast<u32>(dst->GetWidth()), static_cast<u32>(dst->GetHeight())};
+	auto chain = static_cast<libra_mtl_filter_chain_t>(m_shader_chain);
+	libra_error_t err = fns.frame(&chain, GetRenderCmdBuf(), static_cast<size_t>(frame_count),
+		src->GetTexture(), dst->GetTexture(), &vp, nullptr, nullptr);
+
+	dst->SetState(GSTexture::State::Dirty);
+	// The chain recycles per-frame resources on its own ring; commit now so a chain frame always ends a batch.
+	FlushEncoders();
+
+	if (err)
+	{
+		ERROR_LOG("ShaderChain(MTL): frame failed: {}", ShaderChain::DescribeAndFreeError(err));
+		m_shader_chain_failed = true;
+		return false;
+	}
+	return true;
+}}
 
 #endif // __APPLE__
