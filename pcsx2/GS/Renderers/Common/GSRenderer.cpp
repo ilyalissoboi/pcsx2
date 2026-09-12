@@ -639,6 +639,7 @@ void GSRenderer::VSync(u32 field, bool registers_written, bool idle_frame)
 	// Skip presentation when running uncapped while vsync is on.
 	if (skip_frame || g_gs_device->ShouldSkipPresentingFrame())
 	{
+		g_gs_device->NoteShaderChainFrameSkipped();
 		if (BeginPresentFrame(true))
 			EndPresentFrame();
 
@@ -658,6 +659,7 @@ void GSRenderer::VSync(u32 field, bool registers_written, bool idle_frame)
 		GSVector4i src_rect;
 		GSVector4 src_uv, draw_rect;
 		GSTexture* current = g_gs_device->GetCurrent();
+		bool shader_chain_active = false;
 		if (current && !blank_frame)
 		{
 			src_rect = CalculateDrawSrcRect(current, m_real_size);
@@ -667,7 +669,10 @@ void GSRenderer::VSync(u32 field, bool registers_written, bool idle_frame)
 				GetVideoMode() == GSVideoMode::SDTV_480P);
 			s_last_draw_rect = draw_rect;
 
-			if (GSConfig.CASMode != GSCASMode::Disabled)
+			shader_chain_active = g_gs_device->ApplyShaderChain(current, src_rect, src_uv, draw_rect,
+				PCRTCDisplays.GetResolution());
+
+			if (!shader_chain_active && GSConfig.CASMode != GSCASMode::Disabled)
 			{
 				static bool cas_log_once = false;
 				if (g_gs_device->Features().cas_sharpening)
@@ -696,7 +701,9 @@ void GSRenderer::VSync(u32 field, bool registers_written, bool idle_frame)
 				const float shader_time = static_cast<float>(Common::Timer::ConvertValueToSeconds(current_time - m_shader_time_start));
 
 				g_gs_device->PresentRect(current, src_uv, nullptr, draw_rect,
-					s_tv_shader_indices[GSConfig.TVShader], shader_time, BilnIf(GSConfig.LinearPresent != GSPostBilinearMode::Off));
+					shader_chain_active ? PresentShader::COPY : s_tv_shader_indices[GSConfig.TVShader],
+					shader_chain_active ? 0.0f : shader_time,
+					BilnIf(GSConfig.LinearPresent != GSPostBilinearMode::Off));
 			}
 
 			EndPresentFrame();

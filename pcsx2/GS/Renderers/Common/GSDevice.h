@@ -1499,6 +1499,11 @@ protected:
 	GSTexture* m_cas = nullptr;
 	GSTexture* m_colclip_rt = nullptr; ///< Temp hw colclip texture
 	GSTexture* m_ds_as_rt = nullptr; ///< Depth as color
+	GSTexture* m_shader_chain_source = nullptr; ///< Native-resolution copy fed to librashader
+	GSTexture* m_shader_chain_target = nullptr; ///< librashader output, draw-rect sized
+	u64 m_shader_chain_frame_count = 0;
+	std::string m_shader_chain_preset_path; ///< Absolute path of the preset the backend should have loaded
+	bool m_shader_chain_failed_logged = false;
 
 	bool AcquireWindow(bool recreate_window);
 
@@ -1514,6 +1519,16 @@ protected:
 
 	/// Applies CAS and writes to the destination texture, which should be a shader writeable texture.
 	virtual bool DoCAS(GSTexture* sTex, GSTexture* dTex, bool sharpen_only, const std::array<u32, NUM_CAS_CONSTANTS>& constants) = 0;
+
+	/// Returns true if the device has a librashader runtime, i.e. overrides DoApplyShaderChain().
+	virtual bool SupportsShaderChain() const { return false; }
+
+	/// Runs the librashader chain from sTex (native resolution, shader readable) into dTex (render target).
+	/// Backends that support it override this; the default means "no chain rendered".
+	virtual bool DoApplyShaderChain(GSTexture* sTex, GSTexture* dTex, u64 frame_count) { return false; }
+
+	/// Frees the backend chain object. Called on disable, preset change, and Destroy().
+	virtual void ReleaseShaderChain() {}
 
 	/// Perform texture operations for ImGui
 	void UpdateImGuiTextures();
@@ -1721,6 +1736,17 @@ public:
 	void Resize(int width, int height);
 
 	void CAS(GSTexture*& tex, GSVector4i& src_rect, GSVector4& src_uv, const GSVector4& draw_rect, bool sharpen_only);
+
+	/// Applies the librashader shader chain for presentation. On success, rewrites tex/src_rect/src_uv
+	/// to the chain output and returns true; the caller must then skip CAS and the TV shader.
+	bool ApplyShaderChain(GSTexture*& tex, GSVector4i& src_rect, GSVector4& src_uv, const GSVector4& draw_rect,
+		const GSVector2i& native_size);
+
+	/// Advances the chain frame counter for a frame that was not presented, so phase-based shaders keep cadence.
+	void NoteShaderChainFrameSkipped() { m_shader_chain_frame_count++; }
+
+	/// Absolute preset path the chain should be using, or empty when disabled.
+	const std::string& GetShaderChainPresetPath() const { return m_shader_chain_preset_path; }
 
 	bool ResizeRenderTarget(GSTexture** t, int w, int h, bool preserve_contents, bool recycle);
 

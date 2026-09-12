@@ -80,6 +80,8 @@ public:
 		D3D_SHADER_MACRO* GetPtr();
 	};
 
+	struct ShaderChainFunctions;
+
 private:
 	enum : u32
 	{
@@ -131,6 +133,15 @@ private:
 
 	wil::com_ptr_nothrow<IDXGISwapChain1> m_swap_chain;
 	wil::com_ptr_nothrow<ID3D11RenderTargetView> m_swap_chain_rtv;
+
+	// librashader chain (opaque; librashader.h is included in the .cpp only)
+	void* m_shader_chain = nullptr;
+	std::string m_shader_chain_loaded_path;
+	bool m_shader_chain_failed = false;
+	u64 m_shader_chain_params_generation = 0;
+	bool EnsureShaderChain(const ShaderChainFunctions& fns);
+	void ApplyShaderChainParams(const ShaderChainFunctions& fns);
+	void ResyncStateAfterShaderChain();
 
 	wil::com_ptr_nothrow<ID3D11Buffer> m_vb;
 	wil::com_ptr_nothrow<ID3D11Buffer> m_ib;
@@ -321,6 +332,9 @@ public:
 
 	bool Create(GSVSyncMode vsync_mode, bool allow_present_throttle) override;
 	void Destroy() override;
+	bool SupportsShaderChain() const override { return true; }
+	bool DoApplyShaderChain(GSTexture* sTex, GSTexture* dTex, u64 frame_count) override;
+	void ReleaseShaderChain() override;
 
 	RenderAPI GetRenderAPI() const override;
 

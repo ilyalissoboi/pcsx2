@@ -214,10 +214,19 @@ public:
 
 	using PSSelector = GSHWDrawConfig::PSSelector;
 
+	// librashader chain (opaque; the Metal declarations need an Objective-C++ TU)
+	struct ShaderChainFunctions;
+
 	// MARK: Permanent resources
 	std::shared_ptr<std::pair<std::mutex, GSDeviceMTL*>> m_backref;
 	GSMTLDevice m_dev;
 	MRCOwned<id<MTLCommandQueue>> m_queue;
+	void* m_shader_chain = nullptr;
+	std::string m_shader_chain_loaded_path;
+	bool m_shader_chain_failed = false;
+	u64 m_shader_chain_params_generation = 0;
+	bool EnsureShaderChain(const ShaderChainFunctions& fns);
+	void ApplyShaderChainParams(const ShaderChainFunctions& fns);
 	MRCOwned<id<MTLFence>> m_draw_sync_fence;
 	MRCOwned<MTLFunctionConstantValues*> m_fn_constants;
 	MRCOwned<MTLVertexDescriptor*> m_hw_vertex;
@@ -400,6 +409,9 @@ public:
 	MRCOwned<id<MTLComputePipelineState>> MakeComputePipeline(id<MTLFunction> compute, NSString* name);
 	bool Create(GSVSyncMode vsync_mode, bool allow_present_throttle) override;
 	void Destroy() override;
+	bool SupportsShaderChain() const override { return true; }
+	bool DoApplyShaderChain(GSTexture* sTex, GSTexture* dTex, u64 frame_count) override;
+	void ReleaseShaderChain() override;
 
 	void AttachSurfaceOnMainThread();
 	void DetachSurfaceOnMainThread();

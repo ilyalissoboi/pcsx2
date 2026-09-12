@@ -500,6 +500,8 @@ set(pcsx2GSSources
 	GS/GSVector.cpp
 	GS/MultiISA.cpp
 	GS/Renderers/Common/GSDevice.cpp
+	GS/ShaderChain/ShaderPresets.cpp
+	GS/ShaderChain/LibrashaderLoader.cpp
 	GS/Renderers/Common/GSDirtyRect.cpp
 	GS/Renderers/Common/GSFunctionMap.cpp
 	GS/Renderers/Common/GSRenderer.cpp
@@ -540,6 +542,8 @@ set(pcsx2GSHeaders
 	GS/GSXXH.h
 	GS/MultiISA.h
 	GS/Renderers/Common/GSDevice.h
+	GS/ShaderChain/ShaderPresets.h
+	GS/ShaderChain/LibrashaderLoader.h
 	GS/Renderers/Common/GSDirtyRect.h
 	GS/Renderers/Common/GSFastList.h
 	GS/Renderers/Common/GSFunctionMap.h
@@ -650,6 +654,13 @@ if(USE_VULKAN)
 	)
 	target_link_libraries(PCSX2_FLAGS INTERFACE vulkan-headers)
 	target_include_directories(PCSX2_FLAGS INTERFACE ${SHADERC_INCLUDE_DIR})
+endif()
+
+# librashader C header (library is loaded at runtime, see GS/ShaderChain/LibrashaderLoader.cpp)
+target_include_directories(PCSX2_FLAGS INTERFACE ${CMAKE_SOURCE_DIR}/3rdparty/librashader/include)
+
+if(USE_LIBRASHADER)
+	target_compile_definitions(PCSX2_FLAGS INTERFACE PCSX2_HAS_LIBRASHADER=1)
 endif()
 
 set(pcsx2GSMetalShaders
@@ -1305,6 +1316,9 @@ function(setup_main_executable target)
 			$<IF:$<CONFIG:Debug>,kddockwidgets-qt6d.dll,kddockwidgets-qt6.dll>
 			${DEPS_TO_COPY}
 		)
+		if(USE_LIBRASHADER AND LIBRASHADER_FOUND)
+			list(APPEND DEPS_TO_COPY librashader.dll dxcompiler.dll)
+		endif()
 		foreach(DEP_TO_COPY ${DEPS_TO_COPY})
 			install(FILES "${DEPS_BINDIR}/${DEP_TO_COPY}" DESTINATION "${CMAKE_SOURCE_DIR}/bin")
 		endforeach()
@@ -1417,6 +1431,13 @@ function(setup_main_executable target)
 			message(STATUS "Using MoltenVK from ${MOLTENVK_PATH}")
 		else()
 			message(WARNING "MoltenVK not found in path, it will depend on the target system having it.")
+		endif()
+
+		# Copy librashader into the bundle (loaded at runtime by GS/ShaderChain/LibrashaderLoader.cpp)
+		if(USE_LIBRASHADER AND LIBRASHADER_FOUND)
+			target_sources(${target} PRIVATE "${LIBRASHADER_LIBRARY}")
+			set_source_files_properties("${LIBRASHADER_LIBRARY}" PROPERTIES MACOSX_PACKAGE_LOCATION Frameworks)
+			message(STATUS "Using librashader from ${LIBRASHADER_LIBRARY}")
 		endif()
 
 		# If they say to skip postprocess bundle, leave the target in but make it so they have

@@ -21,6 +21,8 @@
     <DepsDLLs Include="$(DepsBinDir)lz4.dll" />
     <DepsDLLs Include="$(DepsBinDir)SDL3.dll" />
     <DepsDLLs Include="$(DepsBinDir)shaderc_shared.dll" />
+    <DepsDLLs Include="$(DepsBinDir)librashader.dll" />
+    <DepsDLLs Include="$(DepsBinDir)dxcompiler.dll" />
     <DepsDLLs Include="$(DepsBinDir)z.dll" />
     <DepsDLLs Include="$(DepsBinDir)zstd.dll" />
     <DepsDLLs Condition="$(Configuration.Contains(Debug))" Include="$(DepsBinDir)kddockwidgets-qt6d.dll" />

@@ -220,6 +220,9 @@
     <Filter Include="System\Ps2\GS\Shaders\Direct3D">
       <UniqueIdentifier>{eb697f5b-85f5-424a-a7e4-8d8b73d3426e}</UniqueIdentifier>
     </Filter>
+    <Filter Include="System\Ps2\GS\ShaderChain">
+      <UniqueIdentifier>{7c1f2a4e-3b9d-4e0a-9f6b-2d8c5a1e7b30}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Tools">
       <UniqueIdentifier>{9153e32b-e1e3-49ac-b490-b56adfd1692f}</UniqueIdentifier>
     </Filter>
@@ -1078,6 +1081,12 @@
     </ClCompile>
     <ClCompile Include="GS\Renderers\Common\GSDevice.cpp">
       <Filter>System\Ps2\GS\Renderers\Common</Filter>
+    </ClCompile>
+    <ClCompile Include="GS\ShaderChain\ShaderPresets.cpp">
+      <Filter>System\Ps2\GS\ShaderChain</Filter>
+    </ClCompile>
+    <ClCompile Include="GS\ShaderChain\LibrashaderLoader.cpp">
+      <Filter>System\Ps2\GS\ShaderChain</Filter>
     </ClCompile>
     <ClCompile Include="GS\Renderers\Common\GSTexture.cpp">
       <Filter>System\Ps2\GS\Renderers\Common</Filter>
@@ -1993,6 +2002,12 @@
     </ClInclude>
     <ClInclude Include="GS\Renderers\Common\GSDevice.h">
       <Filter>System\Ps2\GS\Renderers\Common</Filter>
+    </ClInclude>
+    <ClInclude Include="GS\ShaderChain\ShaderPresets.h">
+      <Filter>System\Ps2\GS\ShaderChain</Filter>
+    </ClInclude>
+    <ClInclude Include="GS\ShaderChain\LibrashaderLoader.h">
+      <Filter>System\Ps2\GS\ShaderChain</Filter>
     </ClInclude>
     <ClInclude Include="GS\Renderers\Common\GSShaderEnums.h">
       <Filter>System\Ps2\GS\Renderers\Common</Filter>

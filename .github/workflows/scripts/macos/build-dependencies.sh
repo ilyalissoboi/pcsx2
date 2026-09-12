@@ -43,6 +43,9 @@ SHADERC_GLSLANG=275822a6261ee689aadb1da5f09a0ec2f058685c
 SHADERC_SPIRVHEADERS=58006c901d1d5c37dece6b6610e9af87fa951375
 SHADERC_SPIRVTOOLS=6337eb62cadd7d124ac6789bf39c0f71148f0a73
 
+LIBRASHADER=0.12.0
+LIBRASHADER_RUST=1.88
+
 mkdir -p deps-build
 cd deps-build
 
@@ -246,8 +249,6 @@ cd "qtbase-everywhere-src-$QT"
 
 # Patch Qt to support macOS 11
 patch -p1 < "$SCRIPTDIR/qt-macos11compat.patch"
-# Backport fix build on Xcode 26.4 (https://codereview.qt-project.org/c/qt/qtbase/+/724619)
-patch -p1 < "$SCRIPTDIR/qt110-xcode264.patch"
 
 # since we don't have a direct reference to QtSvg, it doesn't deployed directly from the main binary
 # (only indirectly from iconengines), and the libqsvg.dylib imageformat plugin does not get deployed.
@@ -328,6 +329,8 @@ cmake "${CMAKE_COMMON[@]}" "$CMAKE_ARCH_UNIVERSAL" -DSHADERC_SKIP_TESTS=ON -DSHA
 make -C build "-j$NPROCS"
 make -C build install
 cd ..
+
+echo "Skipping librashader in the x86_64-only build (macOS x86_64 is out of scope for the shader chain)."
 
 echo "Installing Qt Translations..."
 rm -fr "qttranslations-everywhere-src-$QT"

@@ -815,6 +815,7 @@ struct Pcsx2Config
 					UserHacks_RewriteLargeSTCoords : 1,
 					FXAA : 1,
 					ShadeBoost : 1,
+					ShaderChainEnabled : 1,
 					DumpGSData : 1,
 					SaveRT : 1,
 					SaveFrame : 1,
@@ -937,6 +938,8 @@ struct Pcsx2Config
 		int AudioCaptureBitrate = DEFAULT_AUDIO_CAPTURE_BITRATE;
 
 		std::string Adapter;
+		/// Path of the active librashader .slangp preset, relative to EmuFolders::Shaders. Empty = none.
+		std::string ShaderChainPreset;
 		std::string HWDumpDirectory;
 		std::string SWDumpDirectory;
 
@@ -1472,6 +1475,7 @@ namespace EmuFolders
 	extern std::string Videos;
 	extern std::string DebuggerLayouts;
 	extern std::string DebuggerSettings;
+	extern std::string Shaders;
 
 	/// Initializes critical folders (AppRoot, DataRoot, Settings). Call once on startup.
 	void SetAppRoot();

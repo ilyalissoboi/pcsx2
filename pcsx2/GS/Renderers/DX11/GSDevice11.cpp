@@ -5,6 +5,11 @@
 #include "GS/GSGL.h"
 #include "GSDevice11.h"
 #include "GS/Renderers/DX11/D3D.h"
+#define LIBRA_RUNTIME_D3D11
+#include "librashader.h"
+#include "GS/ShaderChain/LibrashaderLoader.h"
+#include "GS/ShaderChain/ShaderPresets.h"
+#include "fmt/format.h"
 #include "GS/GSExtra.h"
 #include "GS/GSPerfMon.h"
 #include "GS/GSUtil.h"
@@ -617,6 +622,7 @@ bool GSDevice11::Create(GSVSyncMode vsync_mode, bool allow_present_throttle)
 
 void GSDevice11::Destroy()
 {
+	ReleaseShaderChain();
 	delete m_null_texture;
 	
 	GSDevice::Destroy();
@@ -3441,4 +3447,220 @@ void GSDevice11::SetRenderHWShaderResources(const GSHWDrawConfig& config, GSText
 	}
 	if (primid_texture)
 		PSSetShaderResource(TEXTURE_PRIMID, primid_texture);
+}
+
+struct GSDevice11::ShaderChainFunctions
+{
+	PFN_libra_d3d11_filter_chain_create create = nullptr;
+	PFN_libra_d3d11_filter_chain_frame frame = nullptr;
+	PFN_libra_d3d11_filter_chain_set_param set_param = nullptr;
+	PFN_libra_d3d11_filter_chain_free free = nullptr;
+
+	bool Load()
+	{
+		create = reinterpret_cast<PFN_libra_d3d11_filter_chain_create>(ShaderChain::GetSymbol("libra_d3d11_filter_chain_create"));
+		frame = reinterpret_cast<PFN_libra_d3d11_filter_chain_frame>(ShaderChain::GetSymbol("libra_d3d11_filter_chain_frame"));
+		set_param = reinterpret_cast<PFN_libra_d3d11_filter_chain_set_param>(ShaderChain::GetSymbol("libra_d3d11_filter_chain_set_param"));
+		free = reinterpret_cast<PFN_libra_d3d11_filter_chain_free>(ShaderChain::GetSymbol("libra_d3d11_filter_chain_free"));
+		if (create && frame && set_param && free)
+			return true;
+
+		// All or nothing, so that the !create check at the call site is a complete guard.
+		create = nullptr;
+		frame = nullptr;
+		set_param = nullptr;
+		free = nullptr;
+		return false;
+	}
+};
+
+static const GSDevice11::ShaderChainFunctions& GetD3D11ShaderChainFunctions()
+{
+	static GSDevice11::ShaderChainFunctions s_fns;
+	static bool s_loaded = s_fns.Load();
+	(void)s_loaded;
+	return s_fns;
+}
+
+void GSDevice11::ReleaseShaderChain()
+{
+	if (!m_shader_chain)
+	{
+		m_shader_chain_loaded_path.clear();
+		m_shader_chain_failed = false;
+		return;
+	}
+	auto chain = static_cast<libra_d3d11_filter_chain_t>(m_shader_chain);
+	GetD3D11ShaderChainFunctions().free(&chain);
+	m_shader_chain = nullptr;
+	m_shader_chain_loaded_path.clear();
+	m_shader_chain_failed = false;
+}
+
+bool GSDevice11::EnsureShaderChain(const ShaderChainFunctions& fns)
+{
+	const std::string& wanted = GetShaderChainPresetPath();
+	if (m_shader_chain && m_shader_chain_loaded_path == wanted)
+		return true;
+	if (m_shader_chain_failed && m_shader_chain_loaded_path == wanted)
+		return false;
+
+	ReleaseShaderChain();
+	m_shader_chain_loaded_path = wanted;
+
+	const ShaderChain::CommonFunctions& c = ShaderChain::Common();
+	libra_preset_ctx_t ctx = nullptr;
+	libra_shader_preset_t preset = nullptr;
+	// The context (wildcard substitutions, core name) is only honoured when options are passed;
+	// with a null options pointer librashader ignores and leaks it.
+	libra_preset_opt_t popt = {};
+	popt.version = LIBRASHADER_CURRENT_VERSION;
+	libra_error_t err = c.preset_ctx_create(&ctx);
+	if (!err) err = c.preset_ctx_set_runtime(&ctx, LIBRA_PRESET_CTX_RUNTIME_D3D11);
+	if (!err) err = c.preset_ctx_set_core_name(&ctx, "PCSX2");
+	if (!err) err = c.preset_create_with_options(wanted.c_str(), &ctx, &popt, &preset);
+	if (err)
+	{
+		const std::string msg = ShaderChain::DescribeAndFreeError(err);
+		if (ctx) c.preset_ctx_free(&ctx);
+		Host::AddIconOSDMessage("ShaderChain", ICON_FA_TRIANGLE_EXCLAMATION,
+			fmt::format(TRANSLATE_FS("GS", "Failed to load shader preset: {}"), msg), Host::OSD_ERROR_DURATION);
+		ERROR_LOG("ShaderChain(D3D11): preset load failed for {}: {}", wanted, msg);
+		m_shader_chain_failed = true;
+		return false;
+	}
+
+	filter_chain_d3d11_opt_t opt = {};
+	opt.version = LIBRASHADER_CURRENT_VERSION;
+	opt.force_no_mipmaps = false;
+	opt.disable_cache = false;
+
+	libra_d3d11_filter_chain_t chain = nullptr;
+	err = fns.create(&preset, m_dev.get(), &opt, &chain); // preset is consumed by create, even on failure
+	if (err)
+	{
+		const std::string msg = ShaderChain::DescribeAndFreeError(err);
+		Host::AddIconOSDMessage("ShaderChain", ICON_FA_TRIANGLE_EXCLAMATION,
+			fmt::format(TRANSLATE_FS("GS", "Failed to compile shader preset: {}"), msg), Host::OSD_ERROR_DURATION);
+		ERROR_LOG("ShaderChain(D3D11): chain create failed for {}: {}", wanted, msg);
+		m_shader_chain_failed = true;
+		return false;
+	}
+
+	m_shader_chain = chain;
+	m_shader_chain_params_generation = 0;
+	INFO_LOG("ShaderChain(D3D11): loaded {}", wanted);
+	return true;
+}
+
+void GSDevice11::ApplyShaderChainParams(const ShaderChainFunctions& fns)
+{
+	ShaderPresets::ParameterStore& store = ShaderPresets::Params();
+	if (store.GetGeneration() == m_shader_chain_params_generation)
+		return;
+
+	std::string preset;
+	ShaderPresets::ParameterStore::ParamList params;
+	m_shader_chain_params_generation = store.Snapshot(&preset, &params);
+	if (preset != GSConfig.ShaderChainPreset)
+		return;
+
+	auto chain = static_cast<libra_d3d11_filter_chain_t>(m_shader_chain);
+	for (const auto& [name, value] : params)
+	{
+		if (libra_error_t err = fns.set_param(&chain, name.c_str(), value))
+			ShaderChain::DescribeAndFreeError(err);
+	}
+}
+
+void GSDevice11::ResyncStateAfterShaderChain()
+{
+	// librashader's D3D11StateSaveGuard only restores the rasterizer and blend states (with the
+	// blend factor and sample mask). Everything else it binds -- topology, input layout, vertex
+	// buffer, VS/PS, their constant buffers, samplers, shader resources, render targets and the
+	// viewport -- is left as the chain used it, so our m_state cache must not believe anything
+	// about it, otherwise the next binding is skipped as "unchanged".
+	// Mirror what BeginPresent() does for the RTV.
+	m_ctx->OMSetRenderTargets(0, nullptr, nullptr);
+	if (m_state.rtv)
+	{
+		m_state.rtv->Release();
+		m_state.rtv = nullptr;
+	}
+	m_state.current_rt = nullptr;
+	if (m_state.dsv)
+	{
+		m_state.dsv->Release();
+		m_state.dsv = nullptr;
+	}
+	m_state.current_ds = nullptr;
+	if (m_state.dsv_as_rtv)
+	{
+		m_state.dsv_as_rtv->Release();
+		m_state.dsv_as_rtv = nullptr;
+	}
+	m_state.current_ds_as_rt = nullptr;
+
+	ID3D11ShaderResourceView* null_srvs[MAX_TEXTURES] = {};
+	m_ctx->PSSetShaderResources(0, MAX_TEXTURES, null_srvs);
+	m_state.ps_current_srv.fill(nullptr);
+	m_state.ps_pending_srv.fill(nullptr);
+
+	// None of these are AddRef'd by the setters, so nulling them is enough. The values chosen here
+	// are ones the matching setter treats as "changed" so the next draw re-binds everything.
+	m_state.topology = static_cast<D3D11_PRIMITIVE_TOPOLOGY>(-1);
+	m_state.layout = nullptr;
+	m_state.vs = nullptr;
+	m_state.vs_cb = nullptr;
+	m_state.vs_pc = nullptr; // librashader binds its push constant buffer over VS slot 1
+	m_state.ps = nullptr;
+	m_state.ps_cb = nullptr;
+	m_state.vb = nullptr;
+	m_state.vb_stride = 0;
+	m_state.ps_current_ss.fill(nullptr);
+	m_state.ps_pending_ss.fill(nullptr);
+
+	m_state.viewport = GSVector2i(0, 0);
+	m_state.scissor = GSVector4i::zero();
+}
+
+bool GSDevice11::DoApplyShaderChain(GSTexture* sTex, GSTexture* dTex, u64 frame_count)
+{
+	const ShaderChainFunctions& fns = GetD3D11ShaderChainFunctions();
+	if (!fns.create || !EnsureShaderChain(fns))
+		return false;
+
+	ApplyShaderChainParams(fns);
+
+	CommitClear(sTex);
+	CommitClear(dTex);
+
+	// The source must not be bound as a render target and the target must not be bound as an SRV.
+	m_ctx->OMSetRenderTargets(0, nullptr, nullptr);
+	ID3D11ShaderResourceView* null_srvs[MAX_TEXTURES] = {};
+	m_ctx->PSSetShaderResources(0, MAX_TEXTURES, null_srvs);
+
+	GSTexture11* const src = static_cast<GSTexture11*>(sTex);
+	GSTexture11* const dst = static_cast<GSTexture11*>(dTex);
+	ID3D11ShaderResourceView* const srv = *src;
+	ID3D11RenderTargetView* const rtv = *dst;
+	const libra_viewport_t vp = {0.0f, 0.0f, static_cast<u32>(dst->GetWidth()), static_cast<u32>(dst->GetHeight())};
+
+	auto chain = static_cast<libra_d3d11_filter_chain_t>(m_shader_chain);
+	libra_error_t err = fns.frame(&chain, nullptr /* immediate context */, static_cast<size_t>(frame_count), srv, rtv, &vp, nullptr, nullptr);
+
+	dst->SetState(GSTexture::State::Dirty);
+	ResyncStateAfterShaderChain();
+
+	if (err)
+	{
+		ERROR_LOG("ShaderChain(D3D11): frame failed: {}", ShaderChain::DescribeAndFreeError(err));
+		// Drop the chain so EnsureShaderChain() does not recreate and re-log it every frame.
+		// ReleaseShaderChain() clears both fields, so re-latch them afterwards.
+		ReleaseShaderChain();
+		m_shader_chain_loaded_path = GetShaderChainPresetPath();
+		m_shader_chain_failed = true;
+		return false;
+	}
+	return true;
 }

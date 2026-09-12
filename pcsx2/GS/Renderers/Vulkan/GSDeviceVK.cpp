@@ -11,6 +11,13 @@
 #include "GS/Renderers/Vulkan/VKSwapChain.h"
 #include "GS/Renderers/Common/GSDevice.h"
 
+#define LIBRA_RUNTIME_VULKAN
+#include "librashader.h"
+#include "GS/ShaderChain/LibrashaderLoader.h"
+#include "GS/ShaderChain/ShaderPresets.h"
+#include "IconsFontAwesome.h"
+#include "fmt/format.h"
+
 #include "BuildVersion.h"
 #include "Host.h"
 #include "ImGui/ImGuiManager.h"
@@ -2267,6 +2274,8 @@ bool GSDeviceVK::Create(GSVSyncMode vsync_mode, bool allow_present_throttle)
 void GSDeviceVK::Destroy()
 {
 	std::unique_lock lock(s_instance_mutex);
+
+	ReleaseShaderChain();
 
 	GSDevice::Destroy();
 
@@ -6653,4 +6662,190 @@ void GSDeviceVK::SendHWDraw(const GSHWDrawConfig& config, GSTextureVK* draw_rt, 
 
 	if (config.ps.HasColorROV() || config.ps.HasDepthROV())
 		g_perfmon.Put(GSPerfMon::DrawCallsROV, 1);
+}
+
+struct GSDeviceVK::ShaderChainFunctions
+{
+	PFN_libra_vk_filter_chain_create create = nullptr;
+	PFN_libra_vk_filter_chain_frame frame = nullptr;
+	PFN_libra_vk_filter_chain_set_param set_param = nullptr;
+	PFN_libra_vk_filter_chain_free free = nullptr;
+
+	bool Load()
+	{
+		create = reinterpret_cast<PFN_libra_vk_filter_chain_create>(ShaderChain::GetSymbol("libra_vk_filter_chain_create"));
+		frame = reinterpret_cast<PFN_libra_vk_filter_chain_frame>(ShaderChain::GetSymbol("libra_vk_filter_chain_frame"));
+		set_param = reinterpret_cast<PFN_libra_vk_filter_chain_set_param>(ShaderChain::GetSymbol("libra_vk_filter_chain_set_param"));
+		free = reinterpret_cast<PFN_libra_vk_filter_chain_free>(ShaderChain::GetSymbol("libra_vk_filter_chain_free"));
+		if (create && frame && set_param && free)
+			return true;
+
+		// All or nothing, so that the !create check at the call site is a complete guard.
+		create = nullptr;
+		frame = nullptr;
+		set_param = nullptr;
+		free = nullptr;
+		return false;
+	}
+};
+
+static const GSDeviceVK::ShaderChainFunctions& GetVKShaderChainFunctions()
+{
+	static GSDeviceVK::ShaderChainFunctions s_fns;
+	static bool s_loaded = s_fns.Load();
+	(void)s_loaded;
+	return s_fns;
+}
+
+void GSDeviceVK::ReleaseShaderChain()
+{
+	if (!m_shader_chain)
+	{
+		m_shader_chain_loaded_path.clear();
+		m_shader_chain_failed = false;
+		return;
+	}
+
+	// The chain owns per-frame Vulkan objects; make sure nothing in flight references them.
+	if (GetCurrentCommandBuffer() != VK_NULL_HANDLE)
+		ExecuteCommandBuffer(true);
+
+	auto chain = static_cast<libra_vk_filter_chain_t>(m_shader_chain);
+	GetVKShaderChainFunctions().free(&chain);
+	m_shader_chain = nullptr;
+	m_shader_chain_loaded_path.clear();
+	m_shader_chain_failed = false;
+}
+
+bool GSDeviceVK::EnsureShaderChain(const ShaderChainFunctions& fns)
+{
+	const std::string& wanted = GetShaderChainPresetPath();
+	if (m_shader_chain && m_shader_chain_loaded_path == wanted)
+		return true;
+	if (m_shader_chain_failed && m_shader_chain_loaded_path == wanted)
+		return false;
+
+	ReleaseShaderChain();
+	m_shader_chain_loaded_path = wanted;
+
+	const ShaderChain::CommonFunctions& c = ShaderChain::Common();
+	libra_preset_ctx_t ctx = nullptr;
+	libra_shader_preset_t preset = nullptr;
+	// The context (wildcard substitutions, core name) is only honoured when options are passed;
+	// with a null options pointer librashader ignores and leaks it.
+	libra_preset_opt_t popt = {};
+	popt.version = LIBRASHADER_CURRENT_VERSION;
+	libra_error_t err = c.preset_ctx_create(&ctx);
+	if (!err) err = c.preset_ctx_set_runtime(&ctx, LIBRA_PRESET_CTX_RUNTIME_VULKAN);
+	if (!err) err = c.preset_ctx_set_core_name(&ctx, "PCSX2");
+	if (!err) err = c.preset_create_with_options(wanted.c_str(), &ctx, &popt, &preset); // consumes ctx on success
+	if (err)
+	{
+		const std::string msg = ShaderChain::DescribeAndFreeError(err);
+		if (ctx) c.preset_ctx_free(&ctx);
+		Host::AddIconOSDMessage("ShaderChain", ICON_FA_TRIANGLE_EXCLAMATION,
+			fmt::format(TRANSLATE_FS("GS", "Failed to load shader preset: {}"), msg), Host::OSD_ERROR_DURATION);
+		ERROR_LOG("ShaderChain(VK): preset load failed for {}: {}", wanted, msg);
+		m_shader_chain_failed = true;
+		return false;
+	}
+
+	libra_device_vk_t vk = {};
+	vk.physical_device = m_physical_device;
+	vk.instance = m_instance;
+	vk.device = m_device;
+	vk.queue = m_graphics_queue;
+	vk.entry = vkGetInstanceProcAddr;
+
+	filter_chain_vk_opt_t opt = {};
+	opt.version = LIBRASHADER_CURRENT_VERSION;
+	opt.frames_in_flight = NUM_COMMAND_BUFFERS;
+	opt.force_no_mipmaps = false;
+	opt.use_dynamic_rendering = false;
+	opt.disable_cache = false;
+
+	// Chain creation uploads LUTs with its own submit; keep our recorded work ordered before it.
+	EndRenderPass();
+
+	libra_vk_filter_chain_t chain = nullptr;
+	err = fns.create(&preset, vk, &opt, &chain); // preset is consumed by create, even on failure
+	if (err)
+	{
+		const std::string msg = ShaderChain::DescribeAndFreeError(err);
+		Host::AddIconOSDMessage("ShaderChain", ICON_FA_TRIANGLE_EXCLAMATION,
+			fmt::format(TRANSLATE_FS("GS", "Failed to compile shader preset: {}"), msg), Host::OSD_ERROR_DURATION);
+		ERROR_LOG("ShaderChain(VK): chain create failed for {}: {}", wanted, msg);
+		m_shader_chain_failed = true;
+		return false;
+	}
+
+	m_shader_chain = chain;
+	m_shader_chain_params_generation = 0; // force a param push on first frame
+	INFO_LOG("ShaderChain(VK): loaded {}", wanted);
+	return true;
+}
+
+void GSDeviceVK::ApplyShaderChainParams(const ShaderChainFunctions& fns)
+{
+	ShaderPresets::ParameterStore& store = ShaderPresets::Params();
+	if (store.GetGeneration() == m_shader_chain_params_generation)
+		return;
+
+	std::string preset;
+	ShaderPresets::ParameterStore::ParamList params;
+	m_shader_chain_params_generation = store.Snapshot(&preset, &params);
+	if (preset != GSConfig.ShaderChainPreset)
+		return;
+
+	auto chain = static_cast<libra_vk_filter_chain_t>(m_shader_chain);
+	for (const auto& [name, value] : params)
+	{
+		if (libra_error_t err = fns.set_param(&chain, name.c_str(), value))
+			ShaderChain::DescribeAndFreeError(err); // unknown parameter names are ignored
+	}
+}
+
+bool GSDeviceVK::DoApplyShaderChain(GSTexture* sTex, GSTexture* dTex, u64 frame_count)
+{
+	const ShaderChainFunctions& fns = GetVKShaderChainFunctions();
+	if (!fns.create || !EnsureShaderChain(fns))
+		return false;
+
+	ApplyShaderChainParams(fns);
+
+	GSTextureVK* const src = static_cast<GSTextureVK*>(sTex);
+	GSTextureVK* const dst = static_cast<GSTextureVK*>(dTex);
+
+	// librashader records its own render passes into our command buffer.
+	EndRenderPass();
+	src->CommitClear();
+	dst->CommitClear();
+	src->TransitionToLayout(GSTextureVK::Layout::ShaderReadOnly);
+	dst->TransitionToLayout(GSTextureVK::Layout::ColorAttachment);
+
+	const libra_image_vk_t in = {src->GetImage(), src->GetVkFormat(), static_cast<u32>(src->GetWidth()), static_cast<u32>(src->GetHeight())};
+	const libra_image_vk_t out = {dst->GetImage(), dst->GetVkFormat(), static_cast<u32>(dst->GetWidth()), static_cast<u32>(dst->GetHeight())};
+	const libra_viewport_t vp = {0.0f, 0.0f, static_cast<u32>(dst->GetWidth()), static_cast<u32>(dst->GetHeight())};
+
+	auto chain = static_cast<libra_vk_filter_chain_t>(m_shader_chain);
+	libra_error_t err = fns.frame(&chain, GetCurrentCommandBuffer(), static_cast<size_t>(frame_count), in, out, &vp, nullptr, nullptr);
+
+	// librashader left the output in COLOR_ATTACHMENT_OPTIMAL and bound its own state.
+	dst->OverrideImageLayout(GSTextureVK::Layout::ColorAttachment);
+	dst->TransitionToLayout(GSTextureVK::Layout::ShaderReadOnly);
+	dst->SetState(GSTexture::State::Dirty);
+	InvalidateCachedState();
+	SetInitialState(GetCurrentCommandBuffer());
+
+	if (err)
+	{
+		ERROR_LOG("ShaderChain(VK): frame failed: {}", ShaderChain::DescribeAndFreeError(err));
+		// Drop the chain so EnsureShaderChain() does not recreate and re-log it every frame.
+		// ReleaseShaderChain() clears both fields, so re-latch them afterwards.
+		ReleaseShaderChain();
+		m_shader_chain_loaded_path = GetShaderChainPresetPath();
+		m_shader_chain_failed = true;
+		return false;
+	}
+	return true;
 }

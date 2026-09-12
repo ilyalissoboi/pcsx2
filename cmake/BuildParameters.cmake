@@ -22,6 +22,9 @@ if(NOT APPLE)
 	option(USE_OPENGL "Enable OpenGL GS renderer" ON)
 endif()
 option(USE_VULKAN "Enable Vulkan GS renderer" ON)
+if(WIN32 OR APPLE)
+	option(USE_LIBRASHADER "Enable librashader post-processing shader chain (library loaded at runtime)" ON)
+endif()
 
 #-------------------------------------------------------------------------------
 # Path and lib option

@@ -31,6 +31,13 @@ if(USE_VULKAN)
 	find_package(Shaderc REQUIRED)
 endif()
 
+if(USE_LIBRASHADER)
+	find_package(Librashader)
+	if(NOT LIBRASHADER_FOUND)
+		message(WARNING "USE_LIBRASHADER is ON but librashader was not found in CMAKE_PREFIX_PATH; the shader chain will report unavailable at runtime.")
+	endif()
+endif()
+
 # Platform-specific dependencies.
 if (WIN32)
 	add_subdirectory(3rdparty/D3D12MemAlloc EXCLUDE_FROM_ALL)

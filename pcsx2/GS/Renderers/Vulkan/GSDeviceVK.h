@@ -558,8 +558,14 @@ public:
 	RenderAPI GetRenderAPI() const override;
 	bool HasSurface() const override;
 
+	// librashader chain (opaque; librashader.h is only included in the .cpp)
+	struct ShaderChainFunctions;
+
 	bool Create(GSVSyncMode vsync_mode, bool allow_present_throttle) override;
 	void Destroy() override;
+	bool SupportsShaderChain() const override { return true; }
+	bool DoApplyShaderChain(GSTexture* sTex, GSTexture* dTex, u64 frame_count) override;
+	void ReleaseShaderChain() override;
 
 	bool UpdateWindow() override;
 	void ResizeWindow(u32 new_window_width, u32 new_window_height, float new_window_scale) override;
@@ -782,4 +788,11 @@ private:
 
 	// current pipeline selector - we save this in the struct to avoid re-zeroing it every draw
 	PipelineSelector m_pipeline_selector = {};
+
+	void* m_shader_chain = nullptr;
+	std::string m_shader_chain_loaded_path;
+	bool m_shader_chain_failed = false;
+	u64 m_shader_chain_params_generation = 0;
+	bool EnsureShaderChain(const ShaderChainFunctions& fns);
+	void ApplyShaderChainParams(const ShaderChainFunctions& fns);
 };

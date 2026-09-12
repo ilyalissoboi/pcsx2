@@ -15,6 +15,7 @@ FolderSettingsWidget::FolderSettingsWidget(SettingsWindow* settings_dialog, QWid
 	SettingWidgetBinder::BindWidgetToFolderSetting(sif, m_ui.cache, m_ui.cacheBrowse, m_ui.cacheOpen, m_ui.cacheReset, "Folders", "Cache", Path::Combine(EmuFolders::DataRoot, "cache"));
 	SettingWidgetBinder::BindWidgetToFolderSetting(sif, m_ui.cheats, m_ui.cheatsBrowse, m_ui.cheatsOpen, m_ui.cheatsReset, "Folders", "Cheats", Path::Combine(EmuFolders::DataRoot, "cheats"));
 	SettingWidgetBinder::BindWidgetToFolderSetting(sif, m_ui.covers, m_ui.coversBrowse, m_ui.coversOpen, m_ui.coversReset, "Folders", "Covers", Path::Combine(EmuFolders::DataRoot, "covers"));
+	SettingWidgetBinder::BindWidgetToFolderSetting(sif, m_ui.shaders, m_ui.shadersBrowse, m_ui.shadersOpen, m_ui.shadersReset, "Folders", "Shaders", Path::Combine(EmuFolders::DataRoot, "shaders"));
 	SettingWidgetBinder::BindWidgetToFolderSetting(sif, m_ui.snapshots, m_ui.snapshotsBrowse, m_ui.snapshotsOpen, m_ui.snapshotsReset, "Folders", "Snapshots", Path::Combine(EmuFolders::DataRoot, "snaps"));
 	SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.organizeSnapshotsByGame, "EmuCore/GS", "OrganizeScreenshotsByGame", false);
 	SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.organizeVideoDumpByGame, "EmuCore/GS", "OrganizeVideoCaptureByGame", false);
@@ -28,6 +29,8 @@ FolderSettingsWidget::FolderSettingsWidget(SettingsWindow* settings_dialog, QWid
 		tr("Location where user pnach cheat files are stored."));
 	dialog()->registerWidgetHelp(m_ui.covers, tr("Covers Directory"), tr("Default"),
 		tr("Location where game box art and cover images are saved."));
+	dialog()->registerWidgetHelp(m_ui.shaders, tr("Shaders Directory"), tr("Default"),
+		tr("Location where shader presets (.slangp) and shader packs for the post-processing shader chain are stored."));
 	dialog()->registerWidgetHelp(m_ui.snapshots, tr("Snapshots Directory"), tr("Default"),
 		tr("Location where screenshots taken during gameplay are saved."));
 	dialog()->registerWidgetHelp(m_ui.organizeSnapshotsByGame, tr("Save Snapshots in Game-Specific Folders"), tr("Unchecked"),
