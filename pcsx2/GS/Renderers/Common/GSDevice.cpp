@@ -5,6 +5,8 @@
 #include "GS/GSGL.h"
 #include "GS/GS.h"
 #include "GS/GSUtil.h"
+#include "GS/ShaderChain/LibrashaderLoader.h"
+#include "GS/ShaderChain/ShaderPresets.h"
 #include "Host.h"
 
 #include "common/Console.h"
@@ -387,6 +389,7 @@ bool GSDevice::Create(GSVSyncMode vsync_mode, bool allow_present_throttle)
 
 void GSDevice::Destroy()
 {
+	ReleaseShaderChain();
 	ClearCurrent();
 	PurgePool();
 }
@@ -932,6 +935,8 @@ void GSDevice::ClearCurrent()
 	delete m_mad;
 	delete m_target_tmp;
 	delete m_cas;
+	delete m_shader_chain_source;
+	delete m_shader_chain_target;
 
 	m_merge = nullptr;
 	m_weavebob = nullptr;
@@ -939,6 +944,8 @@ void GSDevice::ClearCurrent()
 	m_mad = nullptr;
 	m_target_tmp = nullptr;
 	m_cas = nullptr;
+	m_shader_chain_source = nullptr;
+	m_shader_chain_target = nullptr;
 }
 
 void GSDevice::Merge(GSTexture* sTex[3], GSVector4* sRect, GSVector4* dRect, const GSVector2i& fs, const GSRegPMODE& PMODE, const GSRegEXTBUF& EXTBUF, u32 c)
@@ -1200,6 +1207,81 @@ void GSDevice::CAS(GSTexture*& tex, GSVector4i& src_rect, GSVector4& src_uv, con
 	tex = m_cas;
 	src_rect = GSVector4i(0, 0, dst_width, dst_height);
 	src_uv = GSVector4(0.0f, 0.0f, 1.0f, 1.0f);
+}
+
+bool GSDevice::ApplyShaderChain(GSTexture*& tex, GSVector4i& src_rect, GSVector4& src_uv, const GSVector4& draw_rect,
+	const GSVector2i& native_size)
+{
+	// Resolve what the backend should be running this frame.
+	std::string wanted;
+	if (GSConfig.ShaderChainEnabled && !GSConfig.ShaderChainPreset.empty() && ShaderChain::GetAvailability().available)
+		wanted = ShaderPresets::ResolvePresetPath(GSConfig.ShaderChainPreset);
+
+	if (wanted != m_shader_chain_preset_path)
+	{
+		ReleaseShaderChain();
+		m_shader_chain_preset_path = std::move(wanted);
+		m_shader_chain_failed_logged = false;
+	}
+
+	if (m_shader_chain_preset_path.empty())
+	{
+		if (m_shader_chain_source || m_shader_chain_target)
+		{
+			delete m_shader_chain_source;
+			delete m_shader_chain_target;
+			m_shader_chain_source = nullptr;
+			m_shader_chain_target = nullptr;
+		}
+		return false;
+	}
+
+	const int out_w = static_cast<int>(std::ceil(draw_rect.z - draw_rect.x));
+	const int out_h = static_cast<int>(std::ceil(draw_rect.w - draw_rect.y));
+	if (out_w <= 0 || out_h <= 0 || native_size.x <= 0 || native_size.y <= 0)
+		return false;
+
+	// 1. Downscale the (possibly upscaled) frame to native PCRTC resolution.
+	if (!ResizeRenderTarget(&m_shader_chain_source, native_size.x, native_size.y, false, false))
+		return false;
+
+	const GSVector4 native_rect(0.0f, 0.0f, static_cast<float>(native_size.x), static_cast<float>(native_size.y));
+	const int src_w = src_rect.width();
+	const int src_h = src_rect.height();
+	// Box-filter only for an uncropped integer upscale (the downsample shader samples from the origin);
+	// anything else goes through a bilinear StretchRect using the cropped UVs.
+	const bool integer_factor = (src_rect.x == 0) && (src_rect.y == 0) &&
+	                            (src_w % native_size.x == 0) && (src_h % native_size.y == 0) &&
+	                            (src_w / native_size.x == src_h / native_size.y) && (src_w / native_size.x) > 1;
+	if (integer_factor)
+	{
+		const u32 factor = static_cast<u32>(src_w / native_size.x);
+		FilteredDownsampleTexture(tex, m_shader_chain_source, factor, GSVector2i(0, 0), native_rect);
+	}
+	else
+	{
+		StretchRect(tex, src_uv, m_shader_chain_source, native_rect, ShaderConvert::COPY, Biln);
+	}
+
+	// 2. Run the chain into a draw-rect sized target.
+	if (!ResizeRenderTarget(&m_shader_chain_target, out_w, out_h, false, false))
+		return false;
+
+	const u64 frame_count = m_shader_chain_frame_count++;
+	if (!DoApplyShaderChain(m_shader_chain_source, m_shader_chain_target, frame_count))
+	{
+		if (!m_shader_chain_failed_logged)
+		{
+			WARNING_LOG("Shader chain did not render for preset {}; presenting unshaded frame.", m_shader_chain_preset_path);
+			m_shader_chain_failed_logged = true;
+		}
+		return false;
+	}
+
+	tex = m_shader_chain_target;
+	src_rect = GSVector4i(0, 0, out_w, out_h);
+	src_uv = GSVector4(0.0f, 0.0f, 1.0f, 1.0f);
+	return true;
 }
 
 bool GSHWDrawConfig::BlendState::IsEffective(ColorMaskSelector colormask) const
