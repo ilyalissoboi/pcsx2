@@ -3563,9 +3563,12 @@ void GSDevice11::ApplyShaderChainParams(const ShaderChainFunctions& fns)
 
 void GSDevice11::ResyncStateAfterShaderChain()
 {
-	// librashader restores the D3D11 pipeline state it touched, but our m_state cache must not
-	// believe anything about render targets, shader resources or the viewport, otherwise the
-	// next binding is skipped as "unchanged". Mirror what BeginPresent() does for the RTV.
+	// librashader's D3D11StateSaveGuard only restores the rasterizer and blend states (with the
+	// blend factor and sample mask). Everything else it binds -- topology, input layout, vertex
+	// buffer, VS/PS, their constant buffers, samplers, shader resources, render targets and the
+	// viewport -- is left as the chain used it, so our m_state cache must not believe anything
+	// about it, otherwise the next binding is skipped as "unchanged".
+	// Mirror what BeginPresent() does for the RTV.
 	m_ctx->OMSetRenderTargets(0, nullptr, nullptr);
 	if (m_state.rtv)
 	{
@@ -3590,6 +3593,20 @@ void GSDevice11::ResyncStateAfterShaderChain()
 	m_ctx->PSSetShaderResources(0, MAX_TEXTURES, null_srvs);
 	m_state.ps_current_srv.fill(nullptr);
 	m_state.ps_pending_srv.fill(nullptr);
+
+	// None of these are AddRef'd by the setters, so nulling them is enough. The values chosen here
+	// are ones the matching setter treats as "changed" so the next draw re-binds everything.
+	m_state.topology = static_cast<D3D11_PRIMITIVE_TOPOLOGY>(-1);
+	m_state.layout = nullptr;
+	m_state.vs = nullptr;
+	m_state.vs_cb = nullptr;
+	m_state.vs_pc = nullptr; // librashader binds its push constant buffer over VS slot 1
+	m_state.ps = nullptr;
+	m_state.ps_cb = nullptr;
+	m_state.vb = nullptr;
+	m_state.vb_stride = 0;
+	m_state.ps_current_ss.fill(nullptr);
+	m_state.ps_pending_ss.fill(nullptr);
 
 	m_state.viewport = GSVector2i(0, 0);
 	m_state.scissor = GSVector4i::zero();
