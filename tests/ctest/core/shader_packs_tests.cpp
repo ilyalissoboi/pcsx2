@@ -276,3 +276,35 @@ TEST(ShaderPacks, MarkerWithEmptyVersionRoundTrips)
 	t.file(".shaderpacks/shaders_slang.json", R"({"id":"shaders_slang","files":["shaders_slang/partial.slang"]})");
 	EXPECT_FALSE(ShaderPacks::ReadMarker(t.root(), "shaders_slang").has_value());
 }
+
+TEST(ShaderPacks, ExpandDependenciesDoesNotReAddInstalledDependencyWithMissingFiles)
+{
+	TempRoot t;
+	ASSERT_FALSE(t.root().empty());
+	Error error;
+
+	// The marker is the only source of truth: a dependency whose files were deleted by hand still
+	// counts as installed, so expansion must not queue a reinstall behind the user's back.
+	ASSERT_TRUE(ShaderPacks::WriteMarker(t.root(), MakeInstalled("shaders_slang", {"shaders_slang/gone.slang"}), &error));
+	EXPECT_FALSE(FileSystem::FileExists(Path::Combine(t.root(), "shaders_slang/gone.slang").c_str()));
+
+	const std::vector<std::string> ids{"retro-crisis-gdv-ntsc"};
+	EXPECT_EQ(ShaderPacks::ExpandDependencies(t.root(), ids), (std::vector<std::string>{"retro-crisis-gdv-ntsc"}));
+}
+
+TEST(ShaderPacks, MarkerWithEmptyFilesListRoundTrips)
+{
+	TempRoot t;
+	ASSERT_FALSE(t.root().empty());
+	Error error;
+
+	ASSERT_TRUE(ShaderPacks::WriteMarker(t.root(), MakeInstalled("satpixie-crt", {}), &error)) << error.GetDescription();
+	const std::optional<ShaderPacks::InstalledPack> back = ShaderPacks::ReadMarker(t.root(), "satpixie-crt");
+	ASSERT_TRUE(back.has_value());
+	EXPECT_EQ(back->version, "v");
+	EXPECT_TRUE(back->files.empty());
+
+	// Uninstalling a pack that wrote nothing still removes the marker.
+	ASSERT_TRUE(ShaderPacks::Uninstall(t.root(), "satpixie-crt", &error)) << error.GetDescription();
+	EXPECT_FALSE(ShaderPacks::ReadMarker(t.root(), "satpixie-crt").has_value());
+}

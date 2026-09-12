@@ -14,6 +14,8 @@
 #include <QtWidgets/QMessageBox>
 #include <QtWidgets/QTableWidgetItem>
 
+#include <algorithm>
+
 namespace
 {
 	enum Column
@@ -241,8 +243,14 @@ void ShaderPackDownloadDialog::onUninstallClicked()
 		const ShaderPacks::PackInfo* pack = ShaderPacks::FindPack(id);
 		names.append(pack ? QString::fromUtf8(pack->display_name) : QString::fromStdString(id));
 	}
-	if (QMessageBox::question(this, tr("Uninstall Shader Packs"),
-			tr("Remove the files installed by the following packs?\n\n%1").arg(names.join(QStringLiteral("\n")))) != QMessageBox::Yes)
+	QString question = tr("Remove the files installed by the following packs?\n\n%1").arg(names.join(QStringLiteral("\n")));
+	const auto is_checked = [&ids](const char* id) { return std::find(ids.begin(), ids.end(), id) != ids.end(); };
+	if (is_checked("shaders_slang") && !is_checked("retro-crisis-gdv-ntsc") &&
+		ShaderPacks::GetInstalled("retro-crisis-gdv-ntsc").has_value())
+	{
+		question += tr("\n\nThe Retro Crisis presets require the libretro slang shaders and will stop working.");
+	}
+	if (QMessageBox::question(this, tr("Uninstall Shader Packs"), question) != QMessageBox::Yes)
 		return;
 
 	startWorker(Mode::Uninstall, ids);
@@ -273,6 +281,8 @@ void ShaderPackDownloadDialog::cancelWorker()
 	m_worker->requestInterruption();
 	m_worker->join();
 	m_worker.reset();
+	m_ui.status->setText(tr("Cancelled."));
+	refreshStatuses();
 	updateEnabled();
 }
 

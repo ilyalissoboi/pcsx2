@@ -457,7 +457,8 @@ std::vector<ShaderPacks::InstallResult> ShaderPacks::Install(const std::string& 
 	std::unique_ptr<HTTPDownloader> http = HTTPDownloader::Create(Host::GetHTTPUserAgent());
 	if (!http)
 	{
-		results.push_back({order.front(), false, false, "Failed to create HTTP downloader."});
+		for (const std::string& id : order)
+			results.push_back({id, false, false, "Failed to create HTTP downloader."});
 		return results;
 	}
 

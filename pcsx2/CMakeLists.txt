@@ -66,9 +66,6 @@ set(pcsx2Sources
 	FiFo.cpp
 	FPU.cpp
 	GameList.cpp
-	ShaderPacks.cpp
-	ShaderPackArchive.cpp
-
 	Gif.cpp
 	Gif_Logger.cpp
 	Gif_Unit.cpp
@@ -106,6 +103,8 @@ set(pcsx2Sources
 	R5900OpcodeImpl.cpp
 	R5900OpcodeTables.cpp
 	SaveState.cpp
+	ShaderPackArchive.cpp
+	ShaderPacks.cpp
 	ShiftJisToUnicode.cpp
 	Sif.cpp
 	Sif0.cpp
@@ -155,9 +154,6 @@ set(pcsx2Headers
 	Elfheader.h
 	FW.h
 	GameList.h
-	ShaderPacks.h
-	ShaderPackArchive.h
-
 	Gif.h
 	Gif_Unit.h
 	GS.h
@@ -187,6 +183,8 @@ set(pcsx2Headers
 	R5900OpcodeTables.h
 	SaveState.h
 	ShaderCacheVersion.h
+	ShaderPackArchive.h
+	ShaderPacks.h
 	Sifcmd.h
 	Sif.h
 	SIO/Sio.h

@@ -74,6 +74,8 @@ TEST(ShaderPackArchive, TransformEntryNameRules)
 	EXPECT_EQ(rel, "crt/a.slangp");
 	EXPECT_EQ(ShaderPackArchive::TransformEntryName("a/b/c/d/crt/x.slang", 4, &rel, &error), EntryDisposition::Extract);
 	EXPECT_EQ(rel, "crt/x.slang");
+	EXPECT_EQ(ShaderPackArchive::TransformEntryName("top/./crt/a.slangp", 1, &rel, &error), EntryDisposition::Extract);
+	EXPECT_EQ(rel, "crt/a.slangp"); // '.' components are dropped like empty ones
 	EXPECT_EQ(ShaderPackArchive::TransformEntryName("top/", 1, &rel, &error), EntryDisposition::Skip); // directory
 	EXPECT_EQ(ShaderPackArchive::TransformEntryName("top/crt/", 1, &rel, &error), EntryDisposition::Skip);
 	EXPECT_EQ(ShaderPackArchive::TransformEntryName("a/b/c/d", 4, &rel, &error), EntryDisposition::Skip); // strips to nothing

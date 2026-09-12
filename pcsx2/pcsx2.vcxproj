@@ -205,9 +205,6 @@
     <ClCompile Include="DEV9\net.cpp" />
     <ClCompile Include="DEV9\Win32\tap-win32.cpp" />
     <ClCompile Include="GameList.cpp" />
-    <ClCompile Include="ShaderPacks.cpp" />
-    <ClCompile Include="ShaderPackArchive.cpp" />
-
     <ClCompile Include="GS\GSDrawingEnvironment.cpp" />
     <ClCompile Include="GS\Renderers\DX11\D3D11ShaderCache.cpp" />
     <ClCompile Include="GS\Renderers\DX12\D3D12Builders.cpp" />
@@ -294,6 +291,8 @@
     <ClCompile Include="Recording\InputRecordingFile.cpp" />
     <ClCompile Include="Recording\PadData.cpp" />
     <ClCompile Include="Recording\Utilities\InputRecordingLogger.cpp" />
+    <ClCompile Include="ShaderPackArchive.cpp" />
+    <ClCompile Include="ShaderPacks.cpp" />
     <ClCompile Include="SIO\Memcard\MemoryCardFile.cpp" />
     <ClCompile Include="SIO\Memcard\MemoryCardFolder.cpp" />
     <ClCompile Include="SIO\Memcard\MemoryCardProtocol.cpp" />
@@ -657,9 +656,6 @@
     <ClInclude Include="DEV9\Win32\pcap_io_win32_funcs.h" />
     <ClInclude Include="DEV9\Win32\tap.h" />
     <ClInclude Include="GameList.h" />
-    <ClInclude Include="ShaderPacks.h" />
-    <ClInclude Include="ShaderPackArchive.h" />
-
     <ClInclude Include="GS\GSVector4i_arm64.h" />
     <ClInclude Include="GS\GSVector4_arm64.h" />
     <ClInclude Include="GS\Renderers\DX11\D3D11ShaderCache.h" />
@@ -747,6 +743,8 @@
     <ClInclude Include="Recording\PadData.h" />
     <ClInclude Include="Recording\Utilities\InputRecordingLogger.h" />
     <ClInclude Include="ShaderCacheVersion.h" />
+    <ClInclude Include="ShaderPackArchive.h" />
+    <ClInclude Include="ShaderPacks.h" />
     <ClInclude Include="SIO\Memcard\MemoryCardFile.h" />
     <ClInclude Include="SIO\Memcard\MemoryCardFolder.h" />
     <ClInclude Include="SIO\Memcard\MemoryCardProtocol.h" />

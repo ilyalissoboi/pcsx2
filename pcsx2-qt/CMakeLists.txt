@@ -20,9 +20,6 @@ target_sources(pcsx2-qt PRIVATE
 	CoverDownloadDialog.cpp
 	CoverDownloadDialog.h
 	CoverDownloadDialog.ui
-	ShaderPackDownloadDialog.cpp
-	ShaderPackDownloadDialog.h
-	ShaderPackDownloadDialog.ui
 	DisplayWidget.cpp
 	DisplayWidget.h
 	EarlyHardwareCheck.cpp
@@ -37,6 +34,9 @@ target_sources(pcsx2-qt PRIVATE
 	SetupWizardDialog.cpp
 	SetupWizardDialog.h
 	SetupWizardDialog.ui
+	ShaderPackDownloadDialog.cpp
+	ShaderPackDownloadDialog.h
+	ShaderPackDownloadDialog.ui
 	Themes.cpp
 	Translations.cpp
 	QtHost.cpp

@@ -41,7 +41,7 @@ ShaderPackArchive::EntryDisposition ShaderPackArchive::TransformEntryName(std::s
 			Error::SetStringFmt(error, "Refusing unsafe archive entry '{}'.", entry_name);
 			return EntryDisposition::Reject;
 		}
-		if (!part.empty())
+		if (!part.empty() && part != ".")
 			parts.push_back(part);
 		if (end == std::string_view::npos)
 			break;
