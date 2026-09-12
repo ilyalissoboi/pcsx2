@@ -36,6 +36,29 @@ namespace
 	};
 
 	constexpr const char* MARKER_DIR = ".shaderpacks";
+
+	bool IsSafeRelativePath(std::string_view rel)
+	{
+		if (rel.empty() || rel[0] == '/' || rel[0] == '\\')
+			return false;
+		if (rel.size() >= 2 && rel[1] == ':')
+			return false;
+		if (rel.find('\\') != std::string_view::npos)
+			return false;
+
+		// Check for ".." segments
+		size_t pos = 0;
+		while (pos < rel.size())
+		{
+			const size_t next = rel.find('/', pos);
+			const size_t segment_len = (next == std::string_view::npos) ? (rel.size() - pos) : (next - pos);
+			const std::string_view segment = rel.substr(pos, segment_len);
+			if (segment == "..")
+				return false;
+			pos = (next == std::string_view::npos) ? rel.size() : next + 1;
+		}
+		return true;
+	}
 } // namespace
 
 std::span<const ShaderPacks::PackInfo> ShaderPacks::GetPacks()
@@ -93,7 +116,13 @@ std::optional<ShaderPacks::InstalledPack> ShaderPacks::ReadMarker(const std::str
 	for (const rapidjson::Value& v : files->value.GetArray())
 	{
 		if (v.IsString())
-			pack.files.emplace_back(v.GetString(), v.GetStringLength());
+		{
+			const std::string_view entry(v.GetString(), v.GetStringLength());
+			if (IsSafeRelativePath(entry))
+				pack.files.emplace_back(entry);
+			else
+				WARNING_LOG("ShaderPacks: marker {} lists unsafe path '{}', ignoring it.", path, entry);
+		}
 	}
 	return pack;
 }

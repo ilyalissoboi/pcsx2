@@ -82,7 +82,8 @@ namespace ShaderPacks
 	std::optional<ResolvedVersion> ResolveLatest(const PackInfo& pack, HTTPDownloader& http, Error* error);
 
 	/// Install order for the requested packs: a missing dependency is inserted before its dependent;
-	/// duplicates and unknown ids are dropped.
+	/// duplicates and unknown ids are dropped. Only one dependency level is resolved; the pack table
+	/// has single-level dependencies.
 	std::vector<std::string> ExpandDependencies(const std::string& shaders_root, std::span<const std::string> ids);
 
 	/// Deletes the files recorded in the pack's marker, prunes directories left empty under the pack's

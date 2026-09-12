@@ -239,3 +239,15 @@ TEST(ShaderPacks, UninstallDeletesListedFilesOnly)
 	EXPECT_FALSE(ShaderPacks::Uninstall(t.root(), "satpixie-crt", &error)); // not installed
 	EXPECT_NE(error.GetDescription().find("not installed"), std::string::npos);
 }
+
+TEST(ShaderPacks, MarkerDropsUnsafeFilePaths)
+{
+	TempRoot t;
+	ASSERT_FALSE(t.root().empty());
+	t.file(".shaderpacks/satpixie-crt.json",
+		R"({"id":"satpixie-crt","version":"v","files":["shaders_slang/crt/ok.slangp","../../etc/passwd","/abs.slang","C:/win.slang","a\\b.slang","shaders_slang/../x.slang",""]})");
+	const std::optional<ShaderPacks::InstalledPack> pack = ShaderPacks::ReadMarker(t.root(), "satpixie-crt");
+	ASSERT_TRUE(pack.has_value());
+	ASSERT_EQ(pack->files.size(), 1u);
+	EXPECT_EQ(pack->files[0], "shaders_slang/crt/ok.slangp");
+}
