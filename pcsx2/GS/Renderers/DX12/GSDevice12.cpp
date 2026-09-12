@@ -4887,7 +4887,15 @@ struct GSDevice12::ShaderChainFunctions
 		frame = reinterpret_cast<PFN_libra_d3d12_filter_chain_frame>(ShaderChain::GetSymbol("libra_d3d12_filter_chain_frame"));
 		set_param = reinterpret_cast<PFN_libra_d3d12_filter_chain_set_param>(ShaderChain::GetSymbol("libra_d3d12_filter_chain_set_param"));
 		free = reinterpret_cast<PFN_libra_d3d12_filter_chain_free>(ShaderChain::GetSymbol("libra_d3d12_filter_chain_free"));
-		return create && frame && set_param && free;
+		if (create && frame && set_param && free)
+			return true;
+
+		// All or nothing, so that the !create check at the call site is a complete guard.
+		create = nullptr;
+		frame = nullptr;
+		set_param = nullptr;
+		free = nullptr;
+		return false;
 	}
 };
 
@@ -4972,8 +4980,7 @@ bool GSDevice12::EnsureShaderChain(const ShaderChainFunctions& fns)
 	{
 		const std::string msg = ShaderChain::DescribeAndFreeError(err);
 		Host::AddIconOSDMessage("ShaderChain", ICON_FA_TRIANGLE_EXCLAMATION,
-			fmt::format(TRANSLATE_FS("GS", "Failed to compile shader preset: {} (D3D12 requires dxcompiler.dll next to PCSX2)"), msg),
-			Host::OSD_ERROR_DURATION);
+			fmt::format(TRANSLATE_FS("GS", "Failed to compile shader preset: {}"), msg), Host::OSD_ERROR_DURATION);
 		ERROR_LOG("ShaderChain(D3D12): chain create failed for {}: {}", wanted, msg);
 		m_shader_chain_failed = true;
 		return false;

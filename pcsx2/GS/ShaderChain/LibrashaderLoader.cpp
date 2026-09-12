@@ -49,6 +49,10 @@ namespace
 		if (!l.lib.Open(path.c_str(), &error))
 		{
 			l.avail.reason = fmt::format("librashader could not be loaded from {}: {}", path, error.GetDescription());
+#ifdef _WIN32
+			// Both are load-time imports of librashader.dll, so a missing one fails the whole library.
+			l.avail.reason += " (librashader.dll also needs dxcompiler.dll and d3dcompiler_47.dll beside the executable)";
+#endif
 			return false;
 		}
 

@@ -2844,7 +2844,15 @@ struct GSDeviceMTL::ShaderChainFunctions
 		frame = reinterpret_cast<PFN_libra_mtl_filter_chain_frame>(ShaderChain::GetSymbol("libra_mtl_filter_chain_frame"));
 		set_param = reinterpret_cast<PFN_libra_mtl_filter_chain_set_param>(ShaderChain::GetSymbol("libra_mtl_filter_chain_set_param"));
 		free = reinterpret_cast<PFN_libra_mtl_filter_chain_free>(ShaderChain::GetSymbol("libra_mtl_filter_chain_free"));
-		return create && frame && set_param && free;
+		if (create && frame && set_param && free)
+			return true;
+
+		// All or nothing, so that the !create check at the call site is a complete guard.
+		create = nullptr;
+		frame = nullptr;
+		set_param = nullptr;
+		free = nullptr;
+		return false;
 	}
 };
 
