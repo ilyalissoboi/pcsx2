@@ -947,6 +947,8 @@ void GraphicsSettingsWidget::onShadeBoostChanged()
 void GraphicsSettingsWidget::populateShaderChainPresets(bool add_global_item)
 {
 	// Preserve the current value across repopulation; the binder re-applies it on rebuild.
+	// Index 0 is the per-game "Use Global Setting" item, whose data is not a preset path.
+	const bool was_global = add_global_item && m_post.shaderChainPreset->currentIndex() == 0;
 	const QString current = m_post.shaderChainPreset->currentData().toString();
 	QSignalBlocker blocker(m_post.shaderChainPreset);
 	m_post.shaderChainPreset->clear();
@@ -961,8 +963,13 @@ void GraphicsSettingsWidget::populateShaderChainPresets(bool add_global_item)
 		const QString qpreset = QString::fromStdString(preset);
 		m_post.shaderChainPreset->addItem(qpreset, qpreset);
 	}
+	if (was_global)
+	{
+		m_post.shaderChainPreset->setCurrentIndex(0);
+		return;
+	}
 	const int index = m_post.shaderChainPreset->findData(current);
-	m_post.shaderChainPreset->setCurrentIndex(index >= 0 ? index : 0);
+	m_post.shaderChainPreset->setCurrentIndex(index >= 0 ? index : (add_global_item ? 1 : 0));
 }
 
 void GraphicsSettingsWidget::updateShaderChainAvailability()
