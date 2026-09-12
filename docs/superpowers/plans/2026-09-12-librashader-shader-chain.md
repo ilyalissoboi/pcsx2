@@ -41,12 +41,12 @@ For subsequent updates use `git bundle create /tmp/sc.bundle <last-transferred-s
 ssh pcsx2-win 'cmd /c ""C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat" && cd /d E:\work\pcsx2 && msbuild PCSX2_qt.slnx -m -p:Configuration="Release Clang" -p:Platform=x64 -v:m"'
 ssh pcsx2-win 'cmd /c ""C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat" && cd /d E:\work\pcsx2 && cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=E:\work\pcsx2\deps -DQT_BUILD=ON -DDISABLE_ADVANCE_SIMD=ON && cmake --build build --target unittests"'
 ```
-Wrapper rule: set `VSCMD_SKIP_SENDTELEMETRY=1` before calling `vcvars64.bat` and redirect output **once** at the outer level (`call inner.cmd > log 2>&1`), never per line after vcvars. vcvars otherwise spawns a telemetry process that inherits the log handle and every later `>>` fails with "file in use", silently skipping the command. Long jobs (the deps script) are started as a scheduled task so they survive the SSH session: a wrapper `E:\work\run-deps.cmd` sets `DEBUG=0`, calls `build-dependencies.bat < nul` (so the `pause` in its `:error` label cannot block) and redirects output to `E:\work\pcsx2-deps-build.log`; `schtasks /Create /TN pcsx2-deps /TR E:\work\run-deps.cmd /SC ONCE /ST 00:00 /F && schtasks /Run /TN pcsx2-deps`. Poll with `ssh pcsx2-win 'powershell -NoProfile -Command "Get-Content E:\work\pcsx2-deps-build.log -Tail 5"'`.
+Wrapper rule: set `VSCMD_SKIP_SENDTELEMETRY=1` before calling `vcvars64.bat` and redirect output **once** at the outer level (`call inner.cmd > log 2>&1`), never per line after vcvars. vcvars otherwise spawns a telemetry process that inherits the log handle and every later `>>` fails with "file in use", silently skipping the command. Baseline builds were verified on 2026-09-12 on both machines (Windows: `E:\\work\\run-build.cmd`, about 3 minutes; Mac: `cmake -B build-sc ...`, log in `~/work/pcsx2-deps-work/pcsx2-build.log`). Long jobs (the deps script) are started as a scheduled task so they survive the SSH session: a wrapper `E:\work\run-deps.cmd` sets `DEBUG=0`, calls `build-dependencies.bat < nul` (so the `pause` in its `:error` label cannot block) and redirects output to `E:\work\pcsx2-deps-build.log`; `schtasks /Create /TN pcsx2-deps /TR E:\work\run-deps.cmd /SC ONCE /ST 00:00 /F && schtasks /Run /TN pcsx2-deps`. Poll with `ssh pcsx2-win 'powershell -NoProfile -Command "Get-Content E:\work\pcsx2-deps-build.log -Tail 5"'`.
 
 **Run PCSX2 on the Windows desktop (SSH-spawned GUI processes are invisible):**
 ```bash
-ssh pcsx2-win 'schtasks /Create /TN pcsx2-run /TR "E:\work\pcsx2\bin\pcsx2-qt.exe -batch E:\games\test.iso" /SC ONCE /ST 00:00 /RU ilya /IT /F && schtasks /Run /TN pcsx2-run'
-ssh pcsx2-win 'taskkill /IM pcsx2-qt.exe'
+ssh pcsx2-win 'schtasks /Create /TN pcsx2-run /TR "E:\work\pcsx2\bin\pcsx2-qtx64-clang.exe -batch E:\games\test.iso" /SC ONCE /ST 00:00 /RU ilya /IT /F && schtasks /Run /TN pcsx2-run'
+ssh pcsx2-win 'taskkill /IM pcsx2-qtx64-clang.exe'
 ```
 **Screen capture for visual checks (PCSX2 screenshots exclude the chain by design):** a scheduled interactive task runs `powershell -NoProfile -Command "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; $b=[System.Windows.Forms.Screen]::PrimaryScreen.Bounds; $bmp=New-Object System.Drawing.Bitmap $b.Width,$b.Height; $g=[System.Drawing.Graphics]::FromImage($bmp); $g.CopyFromScreen($b.Location,[System.Drawing.Point]::Empty,$b.Size); $bmp.Save('E:\\work\\shot.png')"`; then `scp pcsx2-win:E:/work/shot.png /tmp/shot.png` and inspect the PNG on the Mac.
 
@@ -2310,7 +2310,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: Rust `cargo`/`rustup` on the Windows deps build host; Windows SDK (`%WindowsSdkDir%`, `%WindowsSDKVersion%` from `vcvars64.bat`).
-- Produces: `deps\bin\librashader.dll`, `deps\bin\librashader.pdb`, `deps\bin\dxcompiler.dll`; both DLLs copied next to `pcsx2-qt.exe` by MSBuild and by the CMake install; `PCSX2_HAS_LIBRASHADER=1` defined for Windows MSBuild builds.
+- Produces: `deps\bin\librashader.dll`, `deps\bin\librashader.pdb`, `deps\bin\dxcompiler.dll`; both DLLs copied next to the executable (`pcsx2-qtx64-clang.exe` for `Release Clang|x64`) by MSBuild and by the CMake install; `PCSX2_HAS_LIBRASHADER=1` defined for Windows MSBuild builds.
 
 Windows-only: run and verify on a Windows x64 machine with Visual Studio, 7-Zip, Git for Windows and Rust installed.
 
@@ -2370,7 +2370,7 @@ In `pcsx2/CMakeLists.txt` line 1303, add `librashader.dll dxcompiler.dll` to `DE
 dir deps\bin\librashader.dll deps\bin\dxcompiler.dll
 dumpbin /DEPENDENTS deps\bin\librashader.dll | findstr /I "d3dx9 d3dcompiler dxcompiler"
 ```
-Expected: both DLLs present; `dumpbin` lists `d3dcompiler_47.dll` and `dxcompiler.dll` but **not** `D3DX9_43.dll`. Then open `PCSX2_qt.slnx`, build `Release Clang|x64` (or run the CI CMake configure from `windows_build_qt.yml:122-127`) and confirm `bin\librashader.dll` and `bin\dxcompiler.dll` exist beside `pcsx2-qt.exe`. Launch, and check `emulog.txt` for `librashader loaded from ... (ABI 2, API 5)`. Then run the Task 9 and Task 10 validation steps.
+Expected: both DLLs present; `dumpbin` lists `d3dcompiler_47.dll` and `dxcompiler.dll` but **not** `D3DX9_43.dll`. Then open `PCSX2_qt.slnx`, build `Release Clang|x64` (or run the CI CMake configure from `windows_build_qt.yml:122-127`) and confirm `bin\librashader.dll` and `bin\dxcompiler.dll` exist beside `pcsx2-qtx64-clang.exe` (the `Release Clang|x64` output name; the deps DLL copy step runs after the link). Launch, and check `emulog.txt` for `librashader loaded from ... (ABI 2, API 5)`. Then run the Task 9 and Task 10 validation steps.
 
 - [ ] **Step 5: Commit**
 
