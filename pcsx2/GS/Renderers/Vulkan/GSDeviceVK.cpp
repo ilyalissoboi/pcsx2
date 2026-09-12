@@ -6832,6 +6832,10 @@ bool GSDeviceVK::DoApplyShaderChain(GSTexture* sTex, GSTexture* dTex, u64 frame_
 	if (err)
 	{
 		ERROR_LOG("ShaderChain(VK): frame failed: {}", ShaderChain::DescribeAndFreeError(err));
+		// Drop the chain so EnsureShaderChain() does not recreate and re-log it every frame.
+		// ReleaseShaderChain() clears both fields, so re-latch them afterwards.
+		ReleaseShaderChain();
+		m_shader_chain_loaded_path = GetShaderChainPresetPath();
 		m_shader_chain_failed = true;
 		return false;
 	}
