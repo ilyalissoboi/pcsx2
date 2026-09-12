@@ -32,6 +32,9 @@ struct D3D12CommandList
 class GSDevice12 final : public GSDevice
 {
 public:
+	// librashader chain (opaque; librashader.h is included in the .cpp only)
+	struct ShaderChainFunctions;
+
 	template <typename T>
 	using ComPtr = wil::com_ptr_nothrow<T>;
 
@@ -508,9 +511,6 @@ protected:
 	virtual void DoStretchRect(GSTexture* sTex, const GSVector4& sRect, const GSVector4& dRect,
 		PresentShader shader, Filter filter) override;
 public:
-	// librashader chain (opaque; librashader.h is included in the .cpp only)
-	struct ShaderChainFunctions;
-
 	GSDevice12();
 	~GSDevice12() override;
 
