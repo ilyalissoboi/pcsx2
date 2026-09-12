@@ -91,6 +91,9 @@ set SHADERC_GLSLANG=275822a6261ee689aadb1da5f09a0ec2f058685c
 set SHADERC_SPIRVHEADERS=58006c901d1d5c37dece6b6610e9af87fa951375
 set SHADERC_SPIRVTOOLS=6337eb62cadd7d124ac6789bf39c0f71148f0a73
 
+set LIBRASHADER=0.12.0
+set LIBRASHADER_RUST=1.88
+
 set AGILITYSDK=1.619.2
 set DXHEADERS=1.619.1
 
@@ -534,6 +537,23 @@ cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="%INSTALLDIR%" -DCMAKE_INST
 cmake --build build --parallel || goto error
 ninja -C build install || goto error
 cd .. || goto error
+
+echo Building librashader...
+where cargo >nul 2>nul || (echo cargo not found on PATH; install Rust from https://rustup.rs && goto error)
+where rustup >nul 2>nul || (echo rustup not found on PATH; install Rust from https://rustup.rs && goto error)
+rustup toolchain install %LIBRASHADER_RUST% --profile minimal || goto error
+rmdir /S /Q "librashader-%LIBRASHADER%" 2>nul
+git clone --depth 1 --branch "librashader-v%LIBRASHADER%" https://github.com/SnowflakePowered/librashader.git "librashader-%LIBRASHADER%" || goto error
+cd "librashader-%LIBRASHADER%" || goto error
+rem Only the runtimes PCSX2 uses on Windows. Never enable runtime-d3d9 (it drags in D3DX9_43.dll).
+rustup run %LIBRASHADER_RUST% cargo build -p librashader-capi --profile optimized --no-default-features --features runtime-vulkan,runtime-d3d11,runtime-d3d12 || goto error
+copy /Y "target\optimized\librashader_capi.dll" "%INSTALLDIR%\bin\librashader.dll" || goto error
+copy /Y "target\optimized\librashader_capi.pdb" "%INSTALLDIR%\bin\librashader.pdb"
+copy /Y "include\librashader.h" "%INSTALLDIR%\include\librashader.h" || goto error
+cd .. || goto error
+
+echo Copying dxcompiler.dll for the librashader D3D12 runtime...
+copy /Y "%WindowsSdkDir%bin\%WindowsSDKVersion%x64\dxcompiler.dll" "%INSTALLDIR%\bin\dxcompiler.dll" || goto error
 
 echo Cleaning up...
 cd ..
