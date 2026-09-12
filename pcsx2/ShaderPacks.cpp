@@ -551,10 +551,11 @@ std::vector<ShaderPacks::InstallResult> ShaderPacks::Install(const std::string& 
 		std::vector<std::string> written;
 		const bool extracted = ShaderPackArchive::ExtractZipToDirectory(zip.get(), install_dir, pack->strip_components, progress, &written, &error);
 
-		// 6. Record whatever landed, so a retry or uninstall can clean up.
+		// 6. Record whatever landed, so a retry or uninstall can clean up. An aborted extraction
+		// records an empty version, which the UI reports as an incomplete install.
 		InstalledPack marker;
 		marker.id = id;
-		marker.version = version->version;
+		marker.version = extracted ? version->version : std::string();
 		marker.source_url = version->download_url;
 		marker.installed_at = CurrentTimestamp();
 		marker.files.reserve(written.size());

@@ -251,3 +251,28 @@ TEST(ShaderPacks, MarkerDropsUnsafeFilePaths)
 	ASSERT_EQ(pack->files.size(), 1u);
 	EXPECT_EQ(pack->files[0], "shaders_slang/crt/ok.slangp");
 }
+
+TEST(ShaderPacks, MarkerWithEmptyVersionRoundTrips)
+{
+	TempRoot t;
+	ASSERT_FALSE(t.root().empty());
+	Error error;
+
+	// Install writes this shape when extraction aborted part-way; the UI reads the empty version as
+	// "incomplete", so the marker must survive the round trip.
+	ShaderPacks::InstalledPack pack = MakeInstalled("shaders_slang", {"shaders_slang/partial.slang"});
+	pack.version.clear();
+	pack.source_url = "https://example.invalid/partial.zip";
+	ASSERT_TRUE(ShaderPacks::WriteMarker(t.root(), pack, &error)) << error.GetDescription();
+
+	const std::optional<ShaderPacks::InstalledPack> back = ShaderPacks::ReadMarker(t.root(), "shaders_slang");
+	ASSERT_TRUE(back.has_value());
+	EXPECT_TRUE(back->version.empty());
+	EXPECT_EQ(back->source_url, pack.source_url);
+	EXPECT_EQ(back->installed_at, pack.installed_at);
+	EXPECT_EQ(back->files, pack.files);
+
+	// A missing version key is still not installed.
+	t.file(".shaderpacks/shaders_slang.json", R"({"id":"shaders_slang","files":["shaders_slang/partial.slang"]})");
+	EXPECT_FALSE(ShaderPacks::ReadMarker(t.root(), "shaders_slang").has_value());
+}

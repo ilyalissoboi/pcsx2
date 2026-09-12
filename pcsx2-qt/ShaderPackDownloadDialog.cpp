@@ -87,7 +87,14 @@ void ShaderPackDownloadDialog::refreshStatuses()
 
 		QString text;
 		bool check = false;
-		if (resolved == m_resolved.end())
+		// Install writes a marker with an empty version when extraction aborted part-way.
+		const bool incomplete = installed.has_value() && installed->version.empty();
+		if (incomplete)
+		{
+			text = tr("Installed (incomplete, reinstall recommended)");
+			check = true;
+		}
+		else if (resolved == m_resolved.end())
 		{
 			text = installed ? tr("Installed %1 (checking for updates...)").arg(QString::fromStdString(installed->version)) : tr("Not installed (checking...)");
 		}
@@ -113,7 +120,7 @@ void ShaderPackDownloadDialog::refreshStatuses()
 		}
 
 		m_ui.packs->item(row, COLUMN_STATUS)->setText(text);
-		if (resolved != m_resolved.end())
+		if (incomplete || resolved != m_resolved.end())
 			name->setCheckState(check ? Qt::Checked : Qt::Unchecked);
 	}
 	m_ui.packs->resizeColumnToContents(COLUMN_STATUS);
