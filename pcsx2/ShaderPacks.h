@@ -78,8 +78,11 @@ namespace ShaderPacks
 	/// GitHub API URL that yields the pack's current version.
 	std::string GetVersionUrl(const PackInfo& pack);
 
-	/// Performs the API request synchronously on the calling thread.
-	std::optional<ResolvedVersion> ResolveLatest(const PackInfo& pack, HTTPDownloader& http, Error* error);
+	/// Performs the API request synchronously on the calling thread, polling http until it completes.
+	/// progress may be null; when it is not, it is attached to the request and cancelling it aborts
+	/// the wait. Note that the downloader's timeout covers total elapsed time, so callers that also
+	/// download should set a short timeout around this call.
+	std::optional<ResolvedVersion> ResolveLatest(const PackInfo& pack, HTTPDownloader& http, ProgressCallback* progress, Error* error);
 
 	/// Install order for the requested packs: a missing dependency is inserted before its dependent;
 	/// duplicates and unknown ids are dropped. Only one dependency level is resolved; the pack table

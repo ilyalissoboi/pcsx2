@@ -86,7 +86,7 @@ it lands in the shared `crt/` tree; the GitHub branch archive wraps everything i
 
 ```cpp
 struct ResolvedVersion { std::string version; std::string download_url; };
-std::optional<ResolvedVersion> ResolveLatest(const PackInfo& pack, HTTPDownloader& http, Error* error);
+std::optional<ResolvedVersion> ResolveLatest(const PackInfo& pack, HTTPDownloader& http, ProgressCallback* progress, Error* error);
 ```
 - BranchHead: `GET https://api.github.com/repos/<repo>/commits/<branch>` → `sha`; `version` is
   the first 12 characters; `download_url` is `https://github.com/<repo>/archive/<sha>.zip`.

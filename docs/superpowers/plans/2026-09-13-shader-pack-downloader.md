@@ -459,7 +459,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Modify: `tests/ctest/core/shader_packs_tests.cpp` (append tests)
 
 **Interfaces:**
-- Consumes: `PackInfo`, `VersionSource` (Task 1); `HTTPDownloader` (`common/HTTPDownloader.h`: `CreateRequest(url, callback)`, `WaitForAllRequests()`, callback `(s32 status, const std::string& content_type, std::vector<u8> data)`, `HTTP_STATUS_OK == 200`); `Host::GetHTTPUserAgent()`.
+- Consumes: `PackInfo`, `VersionSource` (Task 1); `HTTPDownloader` (`common/HTTPDownloader.h`: `CreateRequest(url, callback, progress)`, `PollRequests()`, `HasAnyRequests()`, callback `(s32 status, const std::string& content_type, std::vector<u8> data)`, `HTTP_STATUS_OK == 200`); `Host::GetHTTPUserAgent()`.
 - Produces:
 ```cpp
 namespace ShaderPacks {
@@ -467,7 +467,7 @@ namespace ShaderPacks {
 	bool ParseCommitJson(std::string_view json, std::string* sha, Error* error);
 	bool ParseReleaseJson(std::string_view json, const char* asset_exclude, ResolvedVersion* out, Error* error);
 	std::string GetVersionUrl(const PackInfo& pack);      // API endpoint for the pack
-	std::optional<ResolvedVersion> ResolveLatest(const PackInfo& pack, HTTPDownloader& http, Error* error);
+	std::optional<ResolvedVersion> ResolveLatest(const PackInfo& pack, HTTPDownloader& http, ProgressCallback* progress, Error* error);
 }
 ```
 
@@ -555,8 +555,8 @@ Append to the `ShaderPacks` namespace in `pcsx2/ShaderPacks.h`:
 	/// GitHub API URL that yields the pack's current version.
 	std::string GetVersionUrl(const PackInfo& pack);
 
-	/// Performs the API request synchronously on the calling thread.
-	std::optional<ResolvedVersion> ResolveLatest(const PackInfo& pack, HTTPDownloader& http, Error* error);
+	/// Performs the API request synchronously on the calling thread, polling http until it completes.
+	std::optional<ResolvedVersion> ResolveLatest(const PackInfo& pack, HTTPDownloader& http, ProgressCallback* progress, Error* error);
 ```
 
 Append to `pcsx2/ShaderPacks.cpp` (add `#include "common/HTTPDownloader.h"` and `#include "common/StringUtil.h"` to the includes):
@@ -630,20 +630,29 @@ std::string ShaderPacks::GetVersionUrl(const PackInfo& pack)
 	return fmt::format("https://api.github.com/repos/{}/releases/latest", pack.github_repo);
 }
 
-std::optional<ShaderPacks::ResolvedVersion> ShaderPacks::ResolveLatest(const PackInfo& pack, HTTPDownloader& http, Error* error)
+std::optional<ShaderPacks::ResolvedVersion> ShaderPacks::ResolveLatest(const PackInfo& pack, HTTPDownloader& http,
+	ProgressCallback* progress, Error* error)
 {
 	const std::string url = GetVersionUrl(pack);
+	bool done = false;
 	s32 status = 0;
 	std::string body;
-	http.CreateRequest(url, [&status, &body](s32 status_code, const std::string&, HTTPDownloader::Request::Data data) {
+	http.CreateRequest(url, [&done, &status, &body](s32 status_code, const std::string&, HTTPDownloader::Request::Data data) {
 		status = status_code;
 		body.assign(reinterpret_cast<const char*>(data.data()), data.size());
-	});
-	http.WaitForAllRequests();
+		done = true;
+	}, progress);
+	if (!PumpUntilDone(http, done, progress, error))
+		return std::nullopt;
 
 	if (status != HTTPDownloader::HTTP_STATUS_OK)
 	{
-		Error::SetStringFmt(error, "Version check for {} failed (HTTP {}).", pack.display_name, status);
+		if (status == HTTPDownloader::HTTP_STATUS_CANCELLED)
+			Error::SetStringView(error, "Cancelled.");
+		else if (status == 403) // unauthenticated GitHub API calls are rate limited per IP
+			Error::SetStringView(error, "GitHub API rate limit reached; try again later.");
+		else
+			Error::SetStringFmt(error, "Version check for {} failed (HTTP {}).", pack.display_name, status);
 		return std::nullopt;
 	}
 
@@ -1469,7 +1478,7 @@ std::vector<ShaderPacks::InstallResult> ShaderPacks::Install(const std::string& 
 
 		// 1. Resolve.
 		SetStatus(progress, fmt::format("Checking {}...", pack->display_name));
-		const std::optional<ResolvedVersion> version = ResolveLatest(*pack, *http, &error);
+		const std::optional<ResolvedVersion> version = ResolveLatest(*pack, *http, progress, &error);
 		if (!version.has_value())
 		{
 			result.message = error.GetDescription();
@@ -2114,7 +2123,7 @@ void ShaderPackDownloadDialog::Worker::runAsync()
 				ResolveOutcome& outcome = m_resolved[id];
 				Error error;
 				if (http)
-					outcome.version = ShaderPacks::ResolveLatest(*pack, *http, &error);
+					outcome.version = ShaderPacks::ResolveLatest(*pack, *http, this, &error);
 				else
 					error.SetStringView("Failed to create HTTP downloader.");
 				if (!outcome.version.has_value())

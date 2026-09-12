@@ -65,6 +65,31 @@ namespace
 		}
 		return true;
 	}
+
+	// Polls http until the request's callback has run. Returns false (with error set) if the request
+	// never started - HTTPDownloader::CreateRequest can fail without ever invoking the callback - or
+	// if the caller cancelled.
+	bool PumpUntilDone(HTTPDownloader& http, const bool& done, ProgressCallback* progress, Error* error)
+	{
+		while (!done)
+		{
+			http.PollRequests();
+			if (done)
+				break;
+			if (!http.HasAnyRequests())
+			{
+				Error::SetStringView(error, "Failed to start the request.");
+				return false;
+			}
+			if (progress && progress->IsCancelled())
+			{
+				Error::SetStringView(error, "Cancelled.");
+				return false;
+			}
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		}
+		return true;
+	}
 } // namespace
 
 std::span<const ShaderPacks::PackInfo> ShaderPacks::GetPacks()
@@ -252,20 +277,29 @@ std::string ShaderPacks::GetVersionUrl(const PackInfo& pack)
 	return fmt::format("https://api.github.com/repos/{}/releases/latest", pack.github_repo);
 }
 
-std::optional<ShaderPacks::ResolvedVersion> ShaderPacks::ResolveLatest(const PackInfo& pack, HTTPDownloader& http, Error* error)
+std::optional<ShaderPacks::ResolvedVersion> ShaderPacks::ResolveLatest(const PackInfo& pack, HTTPDownloader& http,
+	ProgressCallback* progress, Error* error)
 {
 	const std::string url = GetVersionUrl(pack);
+	bool done = false;
 	s32 status = 0;
 	std::string body;
-	http.CreateRequest(url, [&status, &body](s32 status_code, const std::string&, HTTPDownloader::Request::Data data) {
+	http.CreateRequest(url, [&done, &status, &body](s32 status_code, const std::string&, HTTPDownloader::Request::Data data) {
 		status = status_code;
 		body.assign(reinterpret_cast<const char*>(data.data()), data.size());
-	});
-	http.WaitForAllRequests();
+		done = true;
+	}, progress);
+	if (!PumpUntilDone(http, done, progress, error))
+		return std::nullopt;
 
 	if (status != HTTPDownloader::HTTP_STATUS_OK)
 	{
-		Error::SetStringFmt(error, "Version check for {} failed (HTTP {}).", pack.display_name, status);
+		if (status == HTTPDownloader::HTTP_STATUS_CANCELLED)
+			Error::SetStringView(error, "Cancelled.");
+		else if (status == 403) // unauthenticated GitHub API calls are rate limited per IP
+			Error::SetStringView(error, "GitHub API rate limit reached; try again later.");
+		else
+			Error::SetStringFmt(error, "Version check for {} failed (HTTP {}).", pack.display_name, status);
 		return std::nullopt;
 	}
 
@@ -365,7 +399,10 @@ bool ShaderPacks::Uninstall(const std::string& shaders_root, std::string_view id
 
 namespace
 {
-	constexpr float DOWNLOAD_TIMEOUT_SECONDS = 600.0f; // HTTPDownloader's timeout is total elapsed time
+	// HTTPDownloader's timeout is total elapsed time, so the API calls and the archive download need
+	// different budgets; Install switches between them around each step.
+	constexpr float RESOLVE_TIMEOUT_SECONDS = 30.0f;
+	constexpr float DOWNLOAD_TIMEOUT_SECONDS = 600.0f;
 
 	bool DownloadToMemory(HTTPDownloader& http, const std::string& url, ProgressCallback* progress, std::vector<u8>* out, Error* error)
 	{
@@ -376,13 +413,8 @@ namespace
 			*out = std::move(data);
 			done = true;
 		}, progress);
-
-		while (!done)
-		{
-			http.PollRequests();
-			if (!done)
-				std::this_thread::sleep_for(std::chrono::milliseconds(10));
-		}
+		if (!PumpUntilDone(http, done, progress, error))
+			return false;
 
 		if (status == HTTPDownloader::HTTP_STATUS_CANCELLED)
 		{
@@ -428,7 +460,6 @@ std::vector<ShaderPacks::InstallResult> ShaderPacks::Install(const std::string& 
 		results.push_back({order.front(), false, false, "Failed to create HTTP downloader."});
 		return results;
 	}
-	http->SetTimeout(DOWNLOAD_TIMEOUT_SECONDS);
 
 	if (progress)
 		progress->SetCancellable(true);
@@ -464,16 +495,21 @@ std::vector<ShaderPacks::InstallResult> ShaderPacks::Install(const std::string& 
 
 		// 1. Resolve.
 		SetStatus(progress, fmt::format("Checking {}...", pack->display_name));
-		const std::optional<ResolvedVersion> version = ResolveLatest(*pack, *http, &error);
+		http->SetTimeout(RESOLVE_TIMEOUT_SECONDS);
+		const std::optional<ResolvedVersion> version = ResolveLatest(*pack, *http, progress, &error);
 		if (!version.has_value())
 		{
+			result.cancelled = (error.GetDescription() == "Cancelled.");
 			result.message = error.GetDescription();
+			if (result.cancelled)
+				break;
 			failed_ids.push_back(id);
 			continue;
 		}
 
 		// 2. Download.
 		SetStatus(progress, fmt::format("Downloading {}...", pack->display_name));
+		http->SetTimeout(DOWNLOAD_TIMEOUT_SECONDS);
 		std::vector<u8> archive;
 		if (!DownloadToMemory(*http, version->download_url, progress, &archive, &error))
 		{

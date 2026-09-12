@@ -304,7 +304,7 @@ void ShaderPackDownloadDialog::Worker::runAsync()
 				ResolveOutcome& outcome = m_resolved[id];
 				Error error;
 				if (http)
-					outcome.version = ShaderPacks::ResolveLatest(*pack, *http, &error);
+					outcome.version = ShaderPacks::ResolveLatest(*pack, *http, this, &error);
 				else
 					error.SetStringView("Failed to create HTTP downloader.");
 				if (!outcome.version.has_value())
