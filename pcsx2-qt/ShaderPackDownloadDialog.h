@@ -24,8 +24,9 @@ public:
 	explicit ShaderPackDownloadDialog(QWidget* parent = nullptr);
 	~ShaderPackDownloadDialog();
 
-protected:
-	void closeEvent(QCloseEvent* ev) override;
+	/// Every exit path goes through here (button, Escape, window close), so the worker is always
+	/// stopped before the caller destroys the dialog.
+	void done(int r) override;
 
 private Q_SLOTS:
 	void onWorkerStatus(const QString& text);

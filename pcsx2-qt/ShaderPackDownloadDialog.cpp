@@ -50,9 +50,10 @@ ShaderPackDownloadDialog::~ShaderPackDownloadDialog()
 	pxAssert(!m_worker);
 }
 
-void ShaderPackDownloadDialog::closeEvent(QCloseEvent* ev)
+void ShaderPackDownloadDialog::done(int r)
 {
 	cancelWorker();
+	QDialog::done(r);
 }
 
 void ShaderPackDownloadDialog::populateTable()
