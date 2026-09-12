@@ -377,6 +377,14 @@ private:
 	std::vector<std::unique_ptr<GSTexture12>> m_swap_chain_buffers;
 	u32 m_current_swap_chain_buffer = 0;
 
+	// librashader chain (opaque; librashader.h is included in the .cpp only)
+	void* m_shader_chain = nullptr;
+	std::string m_shader_chain_loaded_path;
+	bool m_shader_chain_failed = false;
+	u64 m_shader_chain_params_generation = 0;
+	bool EnsureShaderChain(const ShaderChainFunctions& fns);
+	void ApplyShaderChainParams(const ShaderChainFunctions& fns);
+
 	bool m_allow_tearing_supported = false;
 	bool m_using_allow_tearing = false;
 	bool m_is_exclusive_fullscreen = false;
@@ -500,6 +508,9 @@ protected:
 	virtual void DoStretchRect(GSTexture* sTex, const GSVector4& sRect, const GSVector4& dRect,
 		PresentShader shader, Filter filter) override;
 public:
+	// librashader chain (opaque; librashader.h is included in the .cpp only)
+	struct ShaderChainFunctions;
+
 	GSDevice12();
 	~GSDevice12() override;
 
@@ -510,6 +521,8 @@ public:
 
 	bool Create(GSVSyncMode vsync_mode, bool allow_present_throttle) override;
 	void Destroy() override;
+	bool DoApplyShaderChain(GSTexture* sTex, GSTexture* dTex, u64 frame_count) override;
+	void ReleaseShaderChain() override;
 
 	bool UpdateWindow() override;
 	void ResizeWindow(u32 new_window_width, u32 new_window_height, float new_window_scale) override;

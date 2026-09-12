@@ -9,6 +9,12 @@
 #include "GS/Renderers/DX12/GSDevice12.h"
 #include "GS/Renderers/DX12/D3D12Builders.h"
 #include "GS/Renderers/DX12/D3D12ShaderCache.h"
+#define LIBRA_RUNTIME_D3D12
+#include "librashader.h"
+#include "GS/ShaderChain/LibrashaderLoader.h"
+#include "GS/ShaderChain/ShaderPresets.h"
+#include "IconsFontAwesome.h"
+#include "fmt/format.h"
 #include "Host.h"
 #include "ShaderCacheVersion.h"
 
@@ -24,6 +30,7 @@
 #include "D3D12MemAlloc.h"
 #include "imgui.h"
 
+#include <iterator>
 #include <sstream>
 #include <limits>
 
@@ -1026,6 +1033,7 @@ bool GSDevice12::Create(GSVSyncMode vsync_mode, bool allow_present_throttle)
 
 void GSDevice12::Destroy()
 {
+	ReleaseShaderChain();
 	GSDevice::Destroy();
 
 	if (GetCommandList().list4)
@@ -4864,4 +4872,176 @@ void GSDevice12::UploadHWDrawVerticesAndIndices(GSHWDrawConfig& config)
 	{
 		IASetIndexBuffer(config.indices, config.nindices);
 	}
+}
+
+struct GSDevice12::ShaderChainFunctions
+{
+	PFN_libra_d3d12_filter_chain_create create = nullptr;
+	PFN_libra_d3d12_filter_chain_frame frame = nullptr;
+	PFN_libra_d3d12_filter_chain_set_param set_param = nullptr;
+	PFN_libra_d3d12_filter_chain_free free = nullptr;
+
+	bool Load()
+	{
+		create = reinterpret_cast<PFN_libra_d3d12_filter_chain_create>(ShaderChain::GetSymbol("libra_d3d12_filter_chain_create"));
+		frame = reinterpret_cast<PFN_libra_d3d12_filter_chain_frame>(ShaderChain::GetSymbol("libra_d3d12_filter_chain_frame"));
+		set_param = reinterpret_cast<PFN_libra_d3d12_filter_chain_set_param>(ShaderChain::GetSymbol("libra_d3d12_filter_chain_set_param"));
+		free = reinterpret_cast<PFN_libra_d3d12_filter_chain_free>(ShaderChain::GetSymbol("libra_d3d12_filter_chain_free"));
+		return create && frame && set_param && free;
+	}
+};
+
+static const GSDevice12::ShaderChainFunctions& GetD3D12ShaderChainFunctions()
+{
+	static GSDevice12::ShaderChainFunctions s_fns;
+	static bool s_loaded = s_fns.Load();
+	(void)s_loaded;
+	return s_fns;
+}
+
+void GSDevice12::ReleaseShaderChain()
+{
+	if (!m_shader_chain)
+	{
+		m_shader_chain_loaded_path.clear();
+		m_shader_chain_failed = false;
+		return;
+	}
+
+	// The chain owns per-frame descriptors and resources; drain the GPU before freeing them.
+	if (GetCommandList().list4)
+	{
+		EndRenderPass();
+		ExecuteCommandList(true);
+	}
+
+	auto chain = static_cast<libra_d3d12_filter_chain_t>(m_shader_chain);
+	GetD3D12ShaderChainFunctions().free(&chain);
+	m_shader_chain = nullptr;
+	m_shader_chain_loaded_path.clear();
+	m_shader_chain_failed = false;
+}
+
+bool GSDevice12::EnsureShaderChain(const ShaderChainFunctions& fns)
+{
+	const std::string& wanted = GetShaderChainPresetPath();
+	if (m_shader_chain && m_shader_chain_loaded_path == wanted)
+		return true;
+	if (m_shader_chain_failed && m_shader_chain_loaded_path == wanted)
+		return false;
+
+	ReleaseShaderChain();
+	m_shader_chain_loaded_path = wanted;
+
+	const ShaderChain::CommonFunctions& c = ShaderChain::Common();
+	libra_preset_ctx_t ctx = nullptr;
+	libra_shader_preset_t preset = nullptr;
+	libra_error_t err = c.preset_ctx_create(&ctx);
+	if (!err) err = c.preset_ctx_set_runtime(&ctx, LIBRA_PRESET_CTX_RUNTIME_D3D12);
+	if (!err) err = c.preset_ctx_set_core_name(&ctx, "PCSX2");
+	if (!err) err = c.preset_create_with_options(wanted.c_str(), ctx, nullptr, &preset);
+	if (err)
+	{
+		const std::string msg = ShaderChain::DescribeAndFreeError(err);
+		if (ctx) c.preset_ctx_free(&ctx);
+		Host::AddIconOSDMessage("ShaderChain", ICON_FA_TRIANGLE_EXCLAMATION,
+			fmt::format(TRANSLATE_FS("GS", "Failed to load shader preset: {}"), msg), Host::OSD_ERROR_DURATION);
+		ERROR_LOG("ShaderChain(D3D12): preset load failed for {}: {}", wanted, msg);
+		m_shader_chain_failed = true;
+		return false;
+	}
+
+	filter_chain_d3d12_opt_t opt = {};
+	opt.version = LIBRASHADER_CURRENT_VERSION;
+	opt.force_hlsl_pipeline = false;
+	opt.force_no_mipmaps = false;
+	opt.disable_cache = false;
+	opt.frames_in_flight = 3;
+
+	// Creation submits LUT uploads on its own; keep our pending work ordered before it.
+	EndRenderPass();
+	ExecuteCommandList(false);
+
+	libra_d3d12_filter_chain_t chain = nullptr;
+	err = fns.create(&preset, m_device.get(), &opt, &chain);
+	if (err)
+	{
+		const std::string msg = ShaderChain::DescribeAndFreeError(err);
+		Host::AddIconOSDMessage("ShaderChain", ICON_FA_TRIANGLE_EXCLAMATION,
+			fmt::format(TRANSLATE_FS("GS", "Failed to compile shader preset: {} (D3D12 requires dxcompiler.dll next to PCSX2)"), msg),
+			Host::OSD_ERROR_DURATION);
+		ERROR_LOG("ShaderChain(D3D12): chain create failed for {}: {}", wanted, msg);
+		m_shader_chain_failed = true;
+		return false;
+	}
+
+	m_shader_chain = chain;
+	m_shader_chain_params_generation = 0;
+	INFO_LOG("ShaderChain(D3D12): loaded {}", wanted);
+	return true;
+}
+
+void GSDevice12::ApplyShaderChainParams(const ShaderChainFunctions& fns)
+{
+	ShaderPresets::ParameterStore& store = ShaderPresets::Params();
+	if (store.GetGeneration() == m_shader_chain_params_generation)
+		return;
+
+	std::string preset;
+	ShaderPresets::ParameterStore::ParamList params;
+	m_shader_chain_params_generation = store.Snapshot(&preset, &params);
+	if (preset != GSConfig.ShaderChainPreset)
+		return;
+
+	auto chain = static_cast<libra_d3d12_filter_chain_t>(m_shader_chain);
+	for (const auto& [name, value] : params)
+	{
+		if (libra_error_t err = fns.set_param(&chain, name.c_str(), value))
+			ShaderChain::DescribeAndFreeError(err);
+	}
+}
+
+bool GSDevice12::DoApplyShaderChain(GSTexture* sTex, GSTexture* dTex, u64 frame_count)
+{
+	const ShaderChainFunctions& fns = GetD3D12ShaderChainFunctions();
+	if (!fns.create || !EnsureShaderChain(fns))
+		return false;
+
+	ApplyShaderChainParams(fns);
+
+	GSTexture12* const src = static_cast<GSTexture12*>(sTex);
+	GSTexture12* const dst = static_cast<GSTexture12*>(dTex);
+
+	// librashader uses D3D12 render passes of its own; ours must be closed first.
+	EndRenderPass();
+	src->CommitClear();
+	dst->CommitClear();
+	src->TransitionToState(GSTexture12::ResourceState::PixelShaderResource);
+	dst->TransitionToState(GSTexture12::ResourceState::RenderTarget);
+
+	libra_image_d3d12_t in = {};
+	in.image_type = LIBRA_D3D12_IMAGE_TYPE_RESOURCE;
+	in.handle.resource = src->GetResource();
+	libra_image_d3d12_t out = {};
+	out.image_type = LIBRA_D3D12_IMAGE_TYPE_RESOURCE;
+	out.handle.resource = dst->GetResource();
+	const libra_viewport_t vp = {0.0f, 0.0f, static_cast<u32>(dst->GetWidth()), static_cast<u32>(dst->GetHeight())};
+
+	auto chain = static_cast<libra_d3d12_filter_chain_t>(m_shader_chain);
+	libra_error_t err = fns.frame(&chain, GetCommandList().list4.get(), static_cast<size_t>(frame_count), in, out, &vp, nullptr, nullptr);
+
+	// librashader bound its own descriptor heaps, root signature and pipeline. PCSX2 only sets heaps
+	// at command list reset (see the SetDescriptorHeaps call in MoveToNextCommandList), so rebind them.
+	dst->SetState(GSTexture::State::Dirty);
+	InvalidateCachedState();
+	ID3D12DescriptorHeap* heaps[2] = {GetDescriptorAllocator().GetDescriptorHeap(), GetSamplerAllocator().GetDescriptorHeap()};
+	GetCommandList().list4->SetDescriptorHeaps(static_cast<UINT>(std::size(heaps)), heaps);
+
+	if (err)
+	{
+		ERROR_LOG("ShaderChain(D3D12): frame failed: {}", ShaderChain::DescribeAndFreeError(err));
+		m_shader_chain_failed = true;
+		return false;
+	}
+	return true;
 }
