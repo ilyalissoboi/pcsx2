@@ -332,6 +332,7 @@ public:
 
 	bool Create(GSVSyncMode vsync_mode, bool allow_present_throttle) override;
 	void Destroy() override;
+	bool SupportsShaderChain() const override { return true; }
 	bool DoApplyShaderChain(GSTexture* sTex, GSTexture* dTex, u64 frame_count) override;
 	void ReleaseShaderChain() override;
 

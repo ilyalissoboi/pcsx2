@@ -235,20 +235,7 @@ GraphicsSettingsWidget::GraphicsSettingsWidget(SettingsWindow* settings_dialog, 
 	connect(m_post.shaderChainRefresh, &QPushButton::clicked, this, &GraphicsSettingsWidget::onShaderChainRefreshClicked);
 	connect(m_post.shaderChainOpenFolder, &QPushButton::clicked, this, &GraphicsSettingsWidget::onShaderChainOpenFolderClicked);
 
-	{
-		const ShaderChain::Availability& avail = ShaderChain::GetAvailability();
-		if (!avail.available)
-		{
-			m_post.shaderChainGroup->setEnabled(false);
-			m_post.shaderChainGroup->setToolTip(QString::fromStdString(avail.reason));
-			m_post.shaderChainStatus->setText(tr("Shader chain unavailable: %1").arg(QString::fromStdString(avail.reason)));
-		}
-		else
-		{
-			m_post.shaderChainStatus->setText(tr("Presets are loaded from %1. Place RetroArch slang shader packs in a shaders_slang subfolder.")
-			                                     .arg(QString::fromStdString(EmuFolders::Shaders)));
-		}
-	}
+	updateShaderChainAvailability();
 	onShaderChainEnabledChanged();
 
 	//////////////////////////////////////////////////////////////////////////
@@ -760,7 +747,7 @@ GraphicsSettingsWidget::GraphicsSettingsWidget(SettingsWindow* settings_dialog, 
 
 		dialog()->registerWidgetHelp(m_post.shaderChainEnabled, tr("Enable Shader Chain"), tr("Unchecked"),
 			tr("Applies a RetroArch slang shader preset (.slangp) to the displayed image using librashader. Replaces CAS and the TV Shader while active. "
-			   "Screenshots, video captures and on-screen messages are not affected. Not supported by the OpenGL and Software renderers."));
+			   "Screenshots, video captures and on-screen messages are not affected. Not supported by the OpenGL renderer."));
 		dialog()->registerWidgetHelp(m_post.shaderChainPreset, tr("Preset"), tr("(None)"),
 			tr("Preset file to apply, relative to the Shaders folder. Presets that reference other shaders (for example the libretro shaders_slang pack) "
 			   "must be installed with their directory structure intact."));
@@ -910,6 +897,7 @@ void GraphicsSettingsWidget::onRendererChanged(int index)
 
 	g_emu_thread->applySettings();
 	updateRendererDependentOptions();
+	updateShaderChainAvailability();
 }
 
 void GraphicsSettingsWidget::onAdapterChanged(int index)
@@ -975,6 +963,32 @@ void GraphicsSettingsWidget::populateShaderChainPresets(bool add_global_item)
 	}
 	const int index = m_post.shaderChainPreset->findData(current);
 	m_post.shaderChainPreset->setCurrentIndex(index >= 0 ? index : 0);
+}
+
+void GraphicsSettingsWidget::updateShaderChainAvailability()
+{
+	const ShaderChain::Availability& avail = ShaderChain::GetAvailability();
+	if (!avail.available)
+	{
+		m_post.shaderChainGroup->setEnabled(false);
+		m_post.shaderChainGroup->setToolTip(QString::fromStdString(avail.reason));
+		m_post.shaderChainStatus->setText(tr("Shader chain unavailable: %1").arg(QString::fromStdString(avail.reason)));
+	}
+	else if (getEffectiveRenderer() == GSRendererType::OGL)
+	{
+		// GSDeviceOGL has no librashader runtime, so GSDevice::ApplyShaderChain() skips the chain entirely.
+		const QString reason = tr("The shader chain is not supported by the OpenGL renderer.");
+		m_post.shaderChainGroup->setEnabled(false);
+		m_post.shaderChainGroup->setToolTip(reason);
+		m_post.shaderChainStatus->setText(reason);
+	}
+	else
+	{
+		m_post.shaderChainGroup->setEnabled(true);
+		m_post.shaderChainGroup->setToolTip(QString());
+		m_post.shaderChainStatus->setText(tr("Presets are loaded from %1. Place RetroArch slang shader packs in a shaders_slang subfolder.")
+		                                     .arg(QString::fromStdString(EmuFolders::Shaders)));
+	}
 }
 
 void GraphicsSettingsWidget::onShaderChainEnabledChanged()

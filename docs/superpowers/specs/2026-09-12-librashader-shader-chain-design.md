@@ -245,9 +245,12 @@ returns false and logs once per preset.
   `InvalidateCachedState()`; re-bind PCSX2's descriptor heaps with `SetDescriptorHeaps` on the current list.
 - Destroy: `ExecuteCommandList(true)` (wait for completion) then `libra_d3d12_filter_chain_free`.
 
-### 6.5 OpenGL, SW, Null
-No override; defaults return false. The UI shows the chain as unsupported for the current renderer
-when `GetRenderAPI()` is OpenGL (informational only).
+### 6.5 OpenGL, Null
+No override. `GSDevice::SupportsShaderChain()` returns false there, and `ApplyShaderChain()` treats
+that exactly like a disabled chain: no intermediate textures are allocated and no blit happens.
+The Qt UI disables `shaderChainGroup` (tooltip and status label "The shader chain is not supported by
+the OpenGL renderer.") whenever the effective renderer is OpenGL, re-evaluated on renderer change.
+The Software renderer presents through a hardware device, so the chain works there and is not gated.
 
 ## 7. Qt settings UI (phase 1)
 

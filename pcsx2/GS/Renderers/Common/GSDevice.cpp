@@ -1212,10 +1212,14 @@ void GSDevice::CAS(GSTexture*& tex, GSVector4i& src_rect, GSVector4& src_uv, con
 bool GSDevice::ApplyShaderChain(GSTexture*& tex, GSVector4i& src_rect, GSVector4& src_uv, const GSVector4& draw_rect,
 	const GSVector2i& native_size)
 {
-	// Resolve what the backend should be running this frame.
+	// Resolve what the backend should be running this frame. A device without a librashader runtime
+	// is treated exactly like a disabled chain, so no textures are allocated and no blit happens.
 	std::string wanted;
-	if (GSConfig.ShaderChainEnabled && !GSConfig.ShaderChainPreset.empty() && ShaderChain::GetAvailability().available)
+	if (GSConfig.ShaderChainEnabled && !GSConfig.ShaderChainPreset.empty() && SupportsShaderChain() &&
+		ShaderChain::GetAvailability().available)
+	{
 		wanted = ShaderPresets::ResolvePresetPath(GSConfig.ShaderChainPreset);
+	}
 
 	if (wanted != m_shader_chain_preset_path)
 	{

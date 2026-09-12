@@ -1520,6 +1520,9 @@ protected:
 	/// Applies CAS and writes to the destination texture, which should be a shader writeable texture.
 	virtual bool DoCAS(GSTexture* sTex, GSTexture* dTex, bool sharpen_only, const std::array<u32, NUM_CAS_CONSTANTS>& constants) = 0;
 
+	/// Returns true if the device has a librashader runtime, i.e. overrides DoApplyShaderChain().
+	virtual bool SupportsShaderChain() const { return false; }
+
 	/// Runs the librashader chain from sTex (native resolution, shader readable) into dTex (render target).
 	/// Backends that support it override this; the default means "no chain rendered".
 	virtual bool DoApplyShaderChain(GSTexture* sTex, GSTexture* dTex, u64 frame_count) { return false; }

@@ -60,6 +60,7 @@ private:
 	void updateRendererDependentOptions();
 	void populateUpscaleMultipliers(u32 max_upscale_multiplier);
 	void populateShaderChainPresets(bool add_global_item);
+	void updateShaderChainAvailability();
 
 	Ui::GraphicsSettingsHeader m_header;
 	Ui::GraphicsDisplaySettingsTab m_display;
