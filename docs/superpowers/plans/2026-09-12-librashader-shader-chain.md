@@ -233,7 +233,7 @@ In `EmuFolders::EnsureFoldersExist` add before `return result;`:
 ```bash
 cd ~/work/pcsx2 && cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Devel -DCMAKE_PREFIX_PATH="$HOME/deps" -DCMAKE_OSX_ARCHITECTURES=arm64 -DDISABLE_ADVANCE_SIMD=ON >/dev/null && cmake --build build --target PCSX2 2>&1 | tail -3
 ```
-Expected: build succeeds (`ninja: no work to do` or link of `libPCSX2.a`). If `$HOME/deps` does not exist yet, run `.github/workflows/scripts/macos/build-dependencies.sh ~/deps` first (this takes over an hour; it is a one-off).
+Expected: build succeeds (`ninja: no work to do` or link of `libPCSX2.a`). If `$HOME/deps` does not exist yet, run `.github/workflows/scripts/macos/build-dependencies-universal.sh ~/deps` first (over two hours; it is a one-off; needs Homebrew `nasm` and full Xcode).
 
 - [ ] **Step 4: INI round-trip check**
 
@@ -998,8 +998,8 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ### Task 5: Build librashader in the macOS deps script and bundle it (CMake)
 
 **Files:**
-- Modify: `.github/workflows/scripts/macos/build-dependencies.sh` (add version variable after line 44 `SHADERC_SPIRVTOOLS=...`; add build step after the shaderc step, before `echo "Installing Qt Translations..."`)
-- Modify: `.github/workflows/scripts/macos/build-dependencies-universal.sh` (same insertion points; step must be skipped, see Step 2)
+- Modify: `.github/workflows/scripts/macos/build-dependencies-universal.sh` (add version variables after its `SHADERC_SPIRVTOOLS=...` line; add the build step after the shaderc step, before `echo "Installing Qt Translations..."`)
+- Modify: `.github/workflows/scripts/macos/build-dependencies.sh` (same insertion points; x86_64-only script, step is replaced by a skip message, see Step 2)
 - Create: `cmake/FindLibrashader.cmake`
 - Modify: `cmake/BuildParameters.cmake:22` (after `option(USE_VULKAN ...)`), `cmake/SearchForStuff.cmake:32` (after the Shaderc block), `pcsx2/CMakeLists.txt` (define near the include dir added in Task 1; bundle step after the MoltenVK block at lines 1408-1421)
 
@@ -1007,18 +1007,18 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Consumes: Rust `cargo`/`rustup` on the deps build host (present here: cargo 1.98).
 - Produces: `$INSTALLDIR/lib/librashader.dylib` with id `@rpath/librashader.dylib`; CMake variable `LIBRASHADER_LIBRARY` and imported target `Librashader::librashader`; compile definition `PCSX2_HAS_LIBRASHADER=1`; `PCSX2.app/Contents/Frameworks/librashader.dylib`.
 
-Prerequisite: `~/deps` does not exist on this machine yet. Running the full deps script takes over an hour but is required for any PCSX2 build; the librashader step alone takes a few minutes and can be iterated on separately with the snippet in Step 3.
+Prerequisite: `~/deps` is produced by `build-dependencies-universal.sh ~/deps` (over two hours; required for any PCSX2 build on Apple Silicon). The librashader step alone takes a few minutes and can be iterated on separately with the snippet in Step 3.
 
-- [ ] **Step 1: Add the librashader step to `build-dependencies.sh`**
+- [ ] **Step 1: Add the librashader step to `build-dependencies-universal.sh`**
 
-After line 44 add:
+This is the script CI uses for arm64 macOS builds and the one used on the development Mac (Apple Silicon); it produces fat x86_64+arm64 dependencies. librashader is built for the host architecture only (arm64), which is the phase 1 target. After its `SHADERC_SPIRVTOOLS=...` line add:
 ```bash
 LIBRASHADER=0.12.0
 LIBRASHADER_RUST=1.88
 ```
-After the shaderc `cd ..` (the line before `echo "Installing Qt Translations..."`) add:
+After the shaderc block's `cd ..` (the line before `echo "Installing Qt Translations..."`) add:
 ```bash
-echo "Building librashader..."
+echo "Building librashader (host architecture only)..."
 if ! command -v cargo >/dev/null 2>&1 || ! command -v rustup >/dev/null 2>&1; then
 	echo "cargo/rustup not found on PATH; install Rust from https://rustup.rs and re-run." >&2
 	exit 1
@@ -1036,15 +1036,15 @@ mkdir -p "$INSTALLDIR/include"
 cp include/librashader.h "$INSTALLDIR/include/librashader.h"
 cd ..
 ```
-Note: the header copy into deps is informational; the build uses the vendored copy from Task 1.
+Note: the header copy into deps is informational; the build uses the vendored copy from Task 1. The dylib is single-arch, so `merge_binaries` never touches it (it only merges Mach-O x86_64 files found in the x86 build dir).
 
-- [ ] **Step 2: Keep the universal script working without building librashader**
+- [ ] **Step 2: Document the gap in `build-dependencies.sh`**
 
-In `build-dependencies-universal.sh`, macOS x86_64 is out of scope. Add the same two variables after its `SHADERC_SPIRVTOOLS` line and, at the same position as Step 1, add only:
+`build-dependencies.sh` builds x86_64-only dependencies (used by CI's x86-64 job); macOS x86_64 is out of scope. Add the same two variables after its `SHADERC_SPIRVTOOLS` line and, at the same position as Step 1, add only:
 ```bash
-echo "Skipping librashader in the universal build (macOS x86_64 is out of scope for the shader chain)."
+echo "Skipping librashader in the x86_64-only build (macOS x86_64 is out of scope for the shader chain)."
 ```
-This keeps the CI hash change deliberate and documents the gap.
+This keeps the CI cache-key change deliberate and documents the gap.
 
 - [ ] **Step 3: Run the librashader step standalone to validate it**
 
@@ -1056,7 +1056,7 @@ rustup run 1.88 cargo build -p librashader-capi --profile optimized --no-default
 cp target/optimized/liblibrashader_capi.dylib ~/deps/lib/librashader.dylib && install_name_tool -id @rpath/librashader.dylib ~/deps/lib/librashader.dylib && codesign --force --sign - ~/deps/lib/librashader.dylib && \
 otool -D ~/deps/lib/librashader.dylib && nm -gU ~/deps/lib/librashader.dylib | grep -c " _libra_" && nm -gU ~/deps/lib/librashader.dylib | grep -c "_libra_d3d"
 ```
-Expected: `@rpath/librashader.dylib`; a count of at least 40 `_libra_` exports; `0` d3d exports. If the `--profile optimized` name is rejected, the workspace profile was renamed upstream; use `--release` and `target/release/`. Then run the full deps script once: `.github/workflows/scripts/macos/build-dependencies.sh ~/deps`.
+Expected: `@rpath/librashader.dylib`; a count of at least 40 `_libra_` exports; `0` d3d exports. If the `--profile optimized` name is rejected, the workspace profile was renamed upstream; use `--release` and `target/release/`. Then run the full deps script once: `.github/workflows/scripts/macos/build-dependencies-universal.sh ~/deps` (the x86_64-only `build-dependencies.sh` cannot produce arm64 libraries). Both scripts need Homebrew `nasm` for FFmpeg and full Xcode for MoltenVK.
 
 - [ ] **Step 4: Add CMake discovery, option, define and bundling**
 
