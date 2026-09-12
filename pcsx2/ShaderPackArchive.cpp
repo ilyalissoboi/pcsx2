@@ -83,9 +83,10 @@ bool ShaderPackArchive::ExtractZipToDirectory(zip_t* zip, const std::string& des
 		return false;
 
 	// Canonical destination prefix used to double-check every output path.
+	// Prefix must use the native separator because Canonicalize does.
 	std::string dest_prefix = Path::Canonicalize(dest_dir);
 	if (!dest_prefix.empty() && dest_prefix.back() != '/' && dest_prefix.back() != '\\')
-		dest_prefix.push_back('/');
+		dest_prefix.push_back(FS_OSPATH_SEPARATOR_CHARACTER);
 
 	if (progress)
 		progress->SetProgressRange(static_cast<u32>(num_entries));
