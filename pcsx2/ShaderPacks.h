@@ -61,4 +61,23 @@ namespace ShaderPacks
 
 	/// UTC timestamp formatted as YYYY-MM-DDTHH:MM:SSZ.
 	std::string CurrentTimestamp();
+
+	struct ResolvedVersion
+	{
+		std::string version;
+		std::string download_url;
+	};
+
+	/// Parses a GitHub commits/<ref> response; sha receives the full commit hash.
+	bool ParseCommitJson(std::string_view json, std::string* sha, Error* error);
+
+	/// Parses a GitHub releases/latest response; picks the first asset ending in ".zip" whose name does
+	/// not contain asset_exclude (if non-null).
+	bool ParseReleaseJson(std::string_view json, const char* asset_exclude, ResolvedVersion* out, Error* error);
+
+	/// GitHub API URL that yields the pack's current version.
+	std::string GetVersionUrl(const PackInfo& pack);
+
+	/// Performs the API request synchronously on the calling thread.
+	std::optional<ResolvedVersion> ResolveLatest(const PackInfo& pack, HTTPDownloader& http, Error* error);
 } // namespace ShaderPacks

@@ -119,3 +119,56 @@ TEST(ShaderPacks, TimestampIsUtcIso8601)
 	EXPECT_EQ(ts[10], 'T');
 	EXPECT_EQ(ts[19], 'Z');
 }
+TEST(ShaderPacks, ParseCommitJsonYieldsSha)
+{
+	std::string sha;
+	Error error;
+	ASSERT_TRUE(ShaderPacks::ParseCommitJson(R"({"sha":"0123456789abcdef0123456789abcdef01234567","commit":{}})", &sha, &error)) << error.GetDescription();
+	EXPECT_EQ(sha, "0123456789abcdef0123456789abcdef01234567");
+
+	EXPECT_FALSE(ShaderPacks::ParseCommitJson("{ nope", &sha, &error));
+	EXPECT_FALSE(error.GetDescription().empty());
+	EXPECT_FALSE(ShaderPacks::ParseCommitJson(R"({"commit":{}})", &sha, &error));
+}
+
+TEST(ShaderPacks, ParseReleaseJsonPicksMatchingZipAsset)
+{
+	const char* json = R"({
+		"tag_name": "20260122",
+		"assets": [
+			{"name": "satpixie-crt-shader-variants-20260122.zip", "browser_download_url": "https://x/variants.zip"},
+			{"name": "README.md", "browser_download_url": "https://x/readme"},
+			{"name": "satpixie-crt-shader-20260122.zip", "browser_download_url": "https://x/main.zip"}
+		]})";
+	ShaderPacks::ResolvedVersion out;
+	Error error;
+	ASSERT_TRUE(ShaderPacks::ParseReleaseJson(json, "variants", &out, &error)) << error.GetDescription();
+	EXPECT_EQ(out.version, "20260122");
+	EXPECT_EQ(out.download_url, "https://x/main.zip");
+
+	// Without an exclusion the first .zip wins.
+	ASSERT_TRUE(ShaderPacks::ParseReleaseJson(json, nullptr, &out, &error));
+	EXPECT_EQ(out.download_url, "https://x/variants.zip");
+
+	// RetroCrisis publishes a doubled extension; it still ends in .zip.
+	const char* rc = R"({"tag_name":"20260820","assets":[{"name":"Retro.Crisis.GDV-NTSC.2026.08.20.zip.zip","browser_download_url":"https://x/rc.zip.zip"}]})";
+	ASSERT_TRUE(ShaderPacks::ParseReleaseJson(rc, nullptr, &out, &error));
+	EXPECT_EQ(out.version, "20260820");
+	EXPECT_EQ(out.download_url, "https://x/rc.zip.zip");
+}
+
+TEST(ShaderPacks, ParseReleaseJsonErrors)
+{
+	ShaderPacks::ResolvedVersion out;
+	Error error;
+	EXPECT_FALSE(ShaderPacks::ParseReleaseJson("not json", nullptr, &out, &error));
+	EXPECT_FALSE(ShaderPacks::ParseReleaseJson(R"({"tag_name":"v1","assets":[{"name":"a.tar.gz","browser_download_url":"u"}]})", nullptr, &out, &error));
+	EXPECT_NE(error.GetDescription().find("zip"), std::string::npos);
+	EXPECT_FALSE(ShaderPacks::ParseReleaseJson(R"({"assets":[{"name":"a.zip","browser_download_url":"u"}]})", nullptr, &out, &error)); // no tag_name
+}
+
+TEST(ShaderPacks, VersionUrlsFollowGitHubApi)
+{
+	EXPECT_EQ(ShaderPacks::GetVersionUrl(*ShaderPacks::FindPack("shaders_slang")), "https://api.github.com/repos/libretro/slang-shaders/commits/master");
+	EXPECT_EQ(ShaderPacks::GetVersionUrl(*ShaderPacks::FindPack("satpixie-crt")), "https://api.github.com/repos/Conkwer/satpixie-crt-shader/releases/latest");
+}
