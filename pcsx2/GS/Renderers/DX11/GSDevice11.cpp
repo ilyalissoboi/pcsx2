@@ -3536,7 +3536,7 @@ bool GSDevice11::EnsureShaderChain(const ShaderChainFunctions& fns)
 	opt.disable_cache = false;
 
 	libra_d3d11_filter_chain_t chain = nullptr;
-	err = fns.create(&preset, m_dev.get(), &opt, &chain);
+	err = fns.create(&preset, m_dev.get(), &opt, &chain); // preset is consumed by create, even on failure
 	if (err)
 	{
 		const std::string msg = ShaderChain::DescribeAndFreeError(err);

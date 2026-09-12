@@ -6768,7 +6768,7 @@ bool GSDeviceVK::EnsureShaderChain(const ShaderChainFunctions& fns)
 	EndRenderPass();
 
 	libra_vk_filter_chain_t chain = nullptr;
-	err = fns.create(&preset, vk, &opt, &chain); // consumes preset
+	err = fns.create(&preset, vk, &opt, &chain); // preset is consumed by create, even on failure
 	if (err)
 	{
 		const std::string msg = ShaderChain::DescribeAndFreeError(err);

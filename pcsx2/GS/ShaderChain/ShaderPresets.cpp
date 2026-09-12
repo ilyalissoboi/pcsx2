@@ -6,7 +6,6 @@
 
 #include "common/FileSystem.h"
 #include "common/Path.h"
-#include "common/StringUtil.h"
 
 #include <algorithm>
 
@@ -98,11 +97,10 @@ std::string ShaderPresets::ResolvePresetPath(std::string_view relative)
 
 void ShaderPresets::ParameterStore::Set(std::string preset, ParamList params)
 {
-	{
-		std::lock_guard lock(m_mutex);
-		m_preset = std::move(preset);
-		m_params = std::move(params);
-	}
+	// Bump inside the lock so Snapshot() can never pair new values with the old generation.
+	std::lock_guard lock(m_mutex);
+	m_preset = std::move(preset);
+	m_params = std::move(params);
 	m_generation.fetch_add(1, std::memory_order_acq_rel);
 }
 
