@@ -659,6 +659,10 @@ endif()
 # librashader C header (library is loaded at runtime, see GS/ShaderChain/LibrashaderLoader.cpp)
 target_include_directories(PCSX2_FLAGS INTERFACE ${CMAKE_SOURCE_DIR}/3rdparty/librashader/include)
 
+if(USE_LIBRASHADER)
+	target_compile_definitions(PCSX2_FLAGS INTERFACE PCSX2_HAS_LIBRASHADER=1)
+endif()
+
 set(pcsx2GSMetalShaders
 	GS/Renderers/Metal/cas.metal
 	GS/Renderers/Metal/convert.metal
@@ -1424,6 +1428,13 @@ function(setup_main_executable target)
 			message(STATUS "Using MoltenVK from ${MOLTENVK_PATH}")
 		else()
 			message(WARNING "MoltenVK not found in path, it will depend on the target system having it.")
+		endif()
+
+		# Copy librashader into the bundle (loaded at runtime by GS/ShaderChain/LibrashaderLoader.cpp)
+		if(USE_LIBRASHADER AND LIBRASHADER_FOUND)
+			target_sources(${target} PRIVATE "${LIBRASHADER_LIBRARY}")
+			set_source_files_properties("${LIBRASHADER_LIBRARY}" PROPERTIES MACOSX_PACKAGE_LOCATION Frameworks)
+			message(STATUS "Using librashader from ${LIBRASHADER_LIBRARY}")
 		endif()
 
 		# If they say to skip postprocess bundle, leave the target in but make it so they have

@@ -66,6 +66,9 @@ SHADERC_GLSLANG=275822a6261ee689aadb1da5f09a0ec2f058685c
 SHADERC_SPIRVHEADERS=58006c901d1d5c37dece6b6610e9af87fa951375
 SHADERC_SPIRVTOOLS=6337eb62cadd7d124ac6789bf39c0f71148f0a73
 
+LIBRASHADER=0.12.0
+LIBRASHADER_RUST=1.88
+
 mkdir -p deps-build
 cd deps-build
 
@@ -382,6 +385,24 @@ patch -p1 < "$SCRIPTDIR/../common/shaderc-changes.patch"
 cmake "${CMAKE_COMMON[@]}" "$CMAKE_ARCH_UNIVERSAL" -DSHADERC_SKIP_TESTS=ON -DSHADERC_SKIP_EXAMPLES=ON -DSHADERC_SKIP_COPYRIGHT_CHECK=ON -B build
 make -C build "-j$NPROCS"
 make -C build install
+cd ..
+
+echo "Building librashader (host architecture only)..."
+if ! command -v cargo >/dev/null 2>&1 || ! command -v rustup >/dev/null 2>&1; then
+	echo "cargo/rustup not found on PATH; install Rust from https://rustup.rs and re-run." >&2
+	exit 1
+fi
+rustup toolchain install "$LIBRASHADER_RUST" --profile minimal
+rm -fr "librashader-$LIBRASHADER"
+git clone --depth 1 --branch "librashader-v$LIBRASHADER" https://github.com/SnowflakePowered/librashader.git "librashader-$LIBRASHADER"
+cd "librashader-$LIBRASHADER"
+# Only the runtimes PCSX2 uses on macOS. Never enable runtime-d3d9.
+rustup run "$LIBRASHADER_RUST" cargo build -p librashader-capi --profile optimized --no-default-features --features runtime-vulkan,runtime-metal
+cp target/optimized/liblibrashader_capi.dylib "$INSTALLDIR/lib/librashader.dylib"
+install_name_tool -id @rpath/librashader.dylib "$INSTALLDIR/lib/librashader.dylib"
+codesign --force --sign - "$INSTALLDIR/lib/librashader.dylib"
+mkdir -p "$INSTALLDIR/include"
+cp include/librashader.h "$INSTALLDIR/include/librashader.h"
 cd ..
 
 echo "Installing Qt Translations..."
