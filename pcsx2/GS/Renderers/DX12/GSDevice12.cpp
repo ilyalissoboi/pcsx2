@@ -4938,7 +4938,7 @@ bool GSDevice12::EnsureShaderChain(const ShaderChainFunctions& fns)
 	libra_shader_preset_t preset = nullptr;
 	libra_error_t err = c.preset_ctx_create(&ctx);
 	if (!err) err = c.preset_ctx_set_runtime(&ctx, LIBRA_PRESET_CTX_RUNTIME_D3D12);
-	if (!err) err = c.preset_ctx_set_core_name(&ctx, "PCSX2);
+	if (!err) err = c.preset_ctx_set_core_name(&ctx, "PCSX2");
 	if (!err) err = c.preset_create_with_options(wanted.c_str(), &ctx, nullptr, &preset);
 	if (err)
 	{
