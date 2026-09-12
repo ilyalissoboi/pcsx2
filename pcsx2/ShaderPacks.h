@@ -80,4 +80,16 @@ namespace ShaderPacks
 
 	/// Performs the API request synchronously on the calling thread.
 	std::optional<ResolvedVersion> ResolveLatest(const PackInfo& pack, HTTPDownloader& http, Error* error);
+
+	/// Install order for the requested packs: a missing dependency is inserted before its dependent;
+	/// duplicates and unknown ids are dropped.
+	std::vector<std::string> ExpandDependencies(const std::string& shaders_root, std::span<const std::string> ids);
+
+	/// Deletes the files recorded in the pack's marker, prunes directories left empty under the pack's
+	/// install directory, and removes the marker. Fails if the pack is not installed.
+	bool Uninstall(const std::string& shaders_root, std::string_view id, Error* error);
+
+	/// Removes empty directories below and including dir, deepest first.
+	void PruneEmptyDirectories(const std::string& dir);
+
 } // namespace ShaderPacks

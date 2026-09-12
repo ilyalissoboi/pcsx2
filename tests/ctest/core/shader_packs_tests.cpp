@@ -172,3 +172,70 @@ TEST(ShaderPacks, VersionUrlsFollowGitHubApi)
 	EXPECT_EQ(ShaderPacks::GetVersionUrl(*ShaderPacks::FindPack("shaders_slang")), "https://api.github.com/repos/libretro/slang-shaders/commits/master");
 	EXPECT_EQ(ShaderPacks::GetVersionUrl(*ShaderPacks::FindPack("satpixie-crt")), "https://api.github.com/repos/Conkwer/satpixie-crt-shader/releases/latest");
 }
+
+namespace
+{
+	ShaderPacks::InstalledPack MakeInstalled(const char* id, std::vector<std::string> files)
+	{
+		ShaderPacks::InstalledPack p;
+		p.id = id;
+		p.version = "v";
+		p.installed_at = "2026-09-13T00:00:00Z";
+		p.files = std::move(files);
+		return p;
+	}
+} // namespace
+
+TEST(ShaderPacks, ExpandDependenciesOrdersAndDedupes)
+{
+	TempRoot t;
+	ASSERT_FALSE(t.root().empty());
+	Error error;
+
+	const std::string rc = "retro-crisis-gdv-ntsc", slang = "shaders_slang", sat = "satpixie-crt";
+
+	std::vector<std::string> ids{rc};
+	EXPECT_EQ(ShaderPacks::ExpandDependencies(t.root(), ids), (std::vector<std::string>{slang, rc}));
+
+	ids = {rc, slang};
+	EXPECT_EQ(ShaderPacks::ExpandDependencies(t.root(), ids), (std::vector<std::string>{slang, rc}));
+
+	ids = {sat};
+	EXPECT_EQ(ShaderPacks::ExpandDependencies(t.root(), ids), (std::vector<std::string>{sat}));
+
+	ids = {"bogus", sat};
+	EXPECT_EQ(ShaderPacks::ExpandDependencies(t.root(), ids), (std::vector<std::string>{sat}));
+
+	ASSERT_TRUE(ShaderPacks::WriteMarker(t.root(), MakeInstalled("shaders_slang", {"shaders_slang/stock.slang"}), &error));
+	ids = {rc};
+	EXPECT_EQ(ShaderPacks::ExpandDependencies(t.root(), ids), (std::vector<std::string>{rc}));
+}
+
+TEST(ShaderPacks, UninstallDeletesListedFilesOnly)
+{
+	TempRoot t;
+	ASSERT_FALSE(t.root().empty());
+	Error error;
+
+	t.file("shaders_slang/crt/satpixie-crt.slangp");
+	t.file("shaders_slang/crt/shaders/satpixie/accumulate.slang");
+	t.file("shaders_slang/crt/shaders/satpixie/blur_horiz.slang");
+	t.file("shaders_slang/crt/crt-geom.slangp"); // belongs to another pack, must survive
+	ASSERT_TRUE(ShaderPacks::WriteMarker(t.root(), MakeInstalled("satpixie-crt", {
+		"shaders_slang/crt/satpixie-crt.slangp",
+		"shaders_slang/crt/shaders/satpixie/accumulate.slang",
+		"shaders_slang/crt/shaders/satpixie/blur_horiz.slang",
+		"shaders_slang/crt/shaders/satpixie/already-gone.slang", // missing on disk: tolerated
+	}), &error));
+
+	ASSERT_TRUE(ShaderPacks::Uninstall(t.root(), "satpixie-crt", &error)) << error.GetDescription();
+	EXPECT_FALSE(FileSystem::FileExists(Path::Combine(t.root(), "shaders_slang/crt/satpixie-crt.slangp").c_str()));
+	EXPECT_FALSE(FileSystem::DirectoryExists(Path::Combine(t.root(), "shaders_slang/crt/shaders/satpixie").c_str())); // pruned
+	EXPECT_FALSE(FileSystem::DirectoryExists(Path::Combine(t.root(), "shaders_slang/crt/shaders").c_str())); // pruned
+	EXPECT_TRUE(FileSystem::FileExists(Path::Combine(t.root(), "shaders_slang/crt/crt-geom.slangp").c_str()));
+	EXPECT_TRUE(FileSystem::DirectoryExists(Path::Combine(t.root(), "shaders_slang/crt").c_str())); // not empty
+	EXPECT_FALSE(ShaderPacks::ReadMarker(t.root(), "satpixie-crt").has_value());
+
+	EXPECT_FALSE(ShaderPacks::Uninstall(t.root(), "satpixie-crt", &error)); // not installed
+	EXPECT_NE(error.GetDescription().find("not installed"), std::string::npos);
+}

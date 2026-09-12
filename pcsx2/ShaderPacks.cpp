@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0+
 
 #include "ShaderPacks.h"
+#include <algorithm>
+
 #include "Config.h"
 
 #include "common/Console.h"
@@ -246,4 +248,82 @@ std::optional<ShaderPacks::ResolvedVersion> ShaderPacks::ResolveLatest(const Pac
 		return std::nullopt;
 	}
 	return out;
+}
+
+std::vector<std::string> ShaderPacks::ExpandDependencies(const std::string& shaders_root, std::span<const std::string> ids)
+{
+	std::vector<std::string> result;
+	const auto add = [&result](std::string_view id) {
+		if (std::find(result.begin(), result.end(), id) == result.end())
+			result.emplace_back(id);
+	};
+
+	for (const std::string& id : ids)
+	{
+		const PackInfo* pack = FindPack(id);
+		if (!pack)
+		{
+			WARNING_LOG("ShaderPacks: ignoring unknown pack id '{}'.", id);
+			continue;
+		}
+		if (pack->depends_on && FindPack(pack->depends_on) && !ReadMarker(shaders_root, pack->depends_on).has_value())
+			add(pack->depends_on);
+		add(id);
+	}
+	return result;
+}
+
+void ShaderPacks::PruneEmptyDirectories(const std::string& dir)
+{
+	if (!FileSystem::DirectoryExists(dir.c_str()))
+		return;
+
+	FileSystem::FindResultsArray dirs;
+	FileSystem::FindFiles(dir.c_str(), "*", FILESYSTEM_FIND_RECURSIVE | FILESYSTEM_FIND_FOLDERS | FILESYSTEM_FIND_HIDDEN_FILES, &dirs);
+
+	// Deepest first, so parents become empty after their children are removed.
+	std::sort(dirs.begin(), dirs.end(), [](const FILESYSTEM_FIND_DATA& a, const FILESYSTEM_FIND_DATA& b) {
+		return a.FileName.size() > b.FileName.size();
+	});
+	for (const FILESYSTEM_FIND_DATA& fd : dirs)
+	{
+		if (FileSystem::DirectoryIsEmpty(fd.FileName.c_str()))
+			FileSystem::DeleteDirectory(fd.FileName.c_str());
+	}
+	if (FileSystem::DirectoryIsEmpty(dir.c_str()))
+		FileSystem::DeleteDirectory(dir.c_str());
+}
+
+bool ShaderPacks::Uninstall(const std::string& shaders_root, std::string_view id, Error* error)
+{
+	const PackInfo* pack = FindPack(id);
+	if (!pack)
+	{
+		Error::SetStringFmt(error, "Unknown shader pack '{}'.", id);
+		return false;
+	}
+
+	const std::optional<InstalledPack> installed = ReadMarker(shaders_root, id);
+	if (!installed.has_value())
+	{
+		Error::SetStringFmt(error, "{} is not installed.", pack->display_name);
+		return false;
+	}
+
+	for (const std::string& rel : installed->files)
+	{
+		const std::string path = Path::Combine(shaders_root, rel);
+		if (FileSystem::FileExists(path.c_str()) && !FileSystem::DeleteFilePath(path.c_str()))
+			WARNING_LOG("ShaderPacks: failed to delete '{}'.", path);
+	}
+
+	PruneEmptyDirectories(Path::Combine(shaders_root, pack->install_subdir));
+
+	if (!RemoveMarker(shaders_root, id))
+	{
+		Error::SetStringFmt(error, "Failed to remove the marker for {}.", pack->display_name);
+		return false;
+	}
+	INFO_LOG("ShaderPacks: uninstalled {} ({} files).", pack->display_name, installed->files.size());
+	return true;
 }
