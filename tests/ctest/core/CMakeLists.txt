@@ -1,5 +1,6 @@
 add_pcsx2_test(core_test
 	patch_tests.cpp
+	shader_presets_tests.cpp
 	MockMemoryInterface.h
 	StubHost.cpp
 )

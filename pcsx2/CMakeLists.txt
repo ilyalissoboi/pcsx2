@@ -500,6 +500,7 @@ set(pcsx2GSSources
 	GS/GSVector.cpp
 	GS/MultiISA.cpp
 	GS/Renderers/Common/GSDevice.cpp
+	GS/ShaderChain/ShaderPresets.cpp
 	GS/Renderers/Common/GSDirtyRect.cpp
 	GS/Renderers/Common/GSFunctionMap.cpp
 	GS/Renderers/Common/GSRenderer.cpp
@@ -540,6 +541,7 @@ set(pcsx2GSHeaders
 	GS/GSXXH.h
 	GS/MultiISA.h
 	GS/Renderers/Common/GSDevice.h
+	GS/ShaderChain/ShaderPresets.h
 	GS/Renderers/Common/GSDirtyRect.h
 	GS/Renderers/Common/GSFastList.h
 	GS/Renderers/Common/GSFunctionMap.h
