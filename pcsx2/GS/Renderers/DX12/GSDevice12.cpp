@@ -4936,10 +4936,14 @@ bool GSDevice12::EnsureShaderChain(const ShaderChainFunctions& fns)
 	const ShaderChain::CommonFunctions& c = ShaderChain::Common();
 	libra_preset_ctx_t ctx = nullptr;
 	libra_shader_preset_t preset = nullptr;
+	// The context (wildcard substitutions, core name) is only honoured when options are passed;
+	// with a null options pointer librashader ignores and leaks it.
+	libra_preset_opt_t popt = {};
+	popt.version = LIBRASHADER_CURRENT_VERSION;
 	libra_error_t err = c.preset_ctx_create(&ctx);
 	if (!err) err = c.preset_ctx_set_runtime(&ctx, LIBRA_PRESET_CTX_RUNTIME_D3D12);
 	if (!err) err = c.preset_ctx_set_core_name(&ctx, "PCSX2");
-	if (!err) err = c.preset_create_with_options(wanted.c_str(), &ctx, nullptr, &preset);
+	if (!err) err = c.preset_create_with_options(wanted.c_str(), &ctx, &popt, &preset);
 	if (err)
 	{
 		const std::string msg = ShaderChain::DescribeAndFreeError(err);

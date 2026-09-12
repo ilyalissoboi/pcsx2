@@ -178,7 +178,9 @@ Members: `GSTexture* m_shader_chain_source`, `GSTexture* m_shader_chain_target`,
   chain, clear the failure latch, and create:
   1. `ShaderPresets::ResolvePresetPath(GSConfig.ShaderChainPreset)` -> absolute path; must exist.
   2. `libra_preset_ctx_create`, `_set_runtime(<backend>)`, `_set_core_name("PCSX2")`.
-  3. `libra_preset_create_with_options(path, ctx, nullptr, &preset)`.
+  3. `libra_preset_create_with_options(path, ctx, &opt, &preset)` with a `libra_preset_opt_t`
+     whose `version = LIBRASHADER_CURRENT_VERSION` and all feature flags false. The options
+     pointer must not be null: librashader only applies (and only frees) the context when it is given options.
   4. `libra_<rt>_filter_chain_create(&preset, <device args>, &opts, &chain)`; preset is consumed.
   5. On any error: `libra_error_print`/`write` into a string, `Host::AddIconOSDMessage("ShaderChain", ICON_FA_TRIANGLE_EXCLAMATION, msg, Host::OSD_ERROR_DURATION)`,
      set `m_shader_chain_failed = true`, log once.
