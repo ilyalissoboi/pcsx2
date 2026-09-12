@@ -5,13 +5,17 @@
 #include <algorithm>
 
 #include "Config.h"
+#include "Host.h"
+#include "ShaderPackArchive.h"
 
 #include "common/Console.h"
 #include "common/Error.h"
 #include "common/FileSystem.h"
 #include "common/Path.h"
 #include "common/HTTPDownloader.h"
+#include "common/ProgressCallback.h"
 #include "common/StringUtil.h"
+#include "common/ZipHelpers.h"
 
 #include "fmt/chrono.h"
 #include "fmt/format.h"
@@ -19,7 +23,9 @@
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
 
+#include <chrono>
 #include <ctime>
+#include <thread>
 
 namespace
 {
@@ -355,4 +361,196 @@ bool ShaderPacks::Uninstall(const std::string& shaders_root, std::string_view id
 	}
 	INFO_LOG("ShaderPacks: uninstalled {} ({} files).", pack->display_name, installed->files.size());
 	return true;
+}
+
+namespace
+{
+	constexpr float DOWNLOAD_TIMEOUT_SECONDS = 600.0f; // HTTPDownloader's timeout is total elapsed time
+
+	bool DownloadToMemory(HTTPDownloader& http, const std::string& url, ProgressCallback* progress, std::vector<u8>* out, Error* error)
+	{
+		bool done = false;
+		s32 status = 0;
+		http.CreateRequest(url, [&done, &status, out](s32 status_code, const std::string&, HTTPDownloader::Request::Data data) {
+			status = status_code;
+			*out = std::move(data);
+			done = true;
+		}, progress);
+
+		while (!done)
+		{
+			http.PollRequests();
+			if (!done)
+				std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		}
+
+		if (status == HTTPDownloader::HTTP_STATUS_CANCELLED)
+		{
+			Error::SetStringView(error, "Cancelled.");
+			return false;
+		}
+		if (status != HTTPDownloader::HTTP_STATUS_OK)
+		{
+			Error::SetStringFmt(error, "Download failed (HTTP {}).", status);
+			return false;
+		}
+		if (out->empty())
+		{
+			Error::SetStringView(error, "Download was empty.");
+			return false;
+		}
+		return true;
+	}
+
+	void SetStatus(ProgressCallback* progress, const std::string& text)
+	{
+		if (progress)
+			progress->SetStatusText(text.c_str());
+	}
+
+	bool IsCancelled(ProgressCallback* progress)
+	{
+		return progress && progress->IsCancelled();
+	}
+} // namespace
+
+std::vector<ShaderPacks::InstallResult> ShaderPacks::Install(const std::string& shaders_root, std::span<const std::string> ids,
+	ProgressCallback* progress)
+{
+	std::vector<InstallResult> results;
+	const std::vector<std::string> order = ExpandDependencies(shaders_root, ids);
+	if (order.empty())
+		return results;
+
+	std::unique_ptr<HTTPDownloader> http = HTTPDownloader::Create(Host::GetHTTPUserAgent());
+	if (!http)
+	{
+		results.push_back({order.front(), false, false, "Failed to create HTTP downloader."});
+		return results;
+	}
+	http->SetTimeout(DOWNLOAD_TIMEOUT_SECONDS);
+
+	if (progress)
+		progress->SetCancellable(true);
+
+	std::vector<std::string> failed_ids;
+	for (const std::string& id : order)
+	{
+		InstallResult& result = results.emplace_back();
+		result.id = id;
+		const PackInfo* pack = FindPack(id);
+		if (!pack)
+		{
+			result.message = fmt::format("Unknown shader pack '{}'.", id);
+			continue;
+		}
+
+		if (IsCancelled(progress))
+		{
+			result.cancelled = true;
+			result.message = "Cancelled.";
+			break;
+		}
+
+		if (pack->depends_on && std::find(failed_ids.begin(), failed_ids.end(), pack->depends_on) != failed_ids.end())
+		{
+			const PackInfo* dep = FindPack(pack->depends_on);
+			result.message = fmt::format("Requires {}, which failed to install.", dep ? dep->display_name : pack->depends_on);
+			failed_ids.push_back(id);
+			continue;
+		}
+
+		Error error;
+
+		// 1. Resolve.
+		SetStatus(progress, fmt::format("Checking {}...", pack->display_name));
+		const std::optional<ResolvedVersion> version = ResolveLatest(*pack, *http, &error);
+		if (!version.has_value())
+		{
+			result.message = error.GetDescription();
+			failed_ids.push_back(id);
+			continue;
+		}
+
+		// 2. Download.
+		SetStatus(progress, fmt::format("Downloading {}...", pack->display_name));
+		std::vector<u8> archive;
+		if (!DownloadToMemory(*http, version->download_url, progress, &archive, &error))
+		{
+			result.cancelled = (error.GetDescription() == "Cancelled.");
+			result.message = error.GetDescription();
+			if (result.cancelled)
+				break;
+			failed_ids.push_back(id);
+			continue;
+		}
+		SetStatus(progress, fmt::format("Downloaded {} ({:.1f} MB).", pack->display_name, static_cast<double>(archive.size()) / 1048576.0));
+
+		// 3. Validate.
+		zip_error_t ze = {};
+		auto zip = zip_open_buffer_managed(archive.data(), archive.size(), ZIP_RDONLY, 0, &ze);
+		if (!zip)
+		{
+			result.message = fmt::format("Downloaded file for {} is not a valid zip archive.", pack->display_name);
+			failed_ids.push_back(id);
+			continue;
+		}
+
+		// 4. Remove the previous version, now that the replacement is known to be good.
+		const std::string install_dir = Path::Combine(shaders_root, pack->install_subdir);
+		if (const std::optional<InstalledPack> previous = ReadMarker(shaders_root, id); previous.has_value())
+		{
+			SetStatus(progress, fmt::format("Removing previous {}...", pack->display_name));
+			for (const std::string& rel : previous->files)
+			{
+				const std::string path = Path::Combine(shaders_root, rel);
+				if (FileSystem::FileExists(path.c_str()) && !FileSystem::DeleteFilePath(path.c_str()))
+					WARNING_LOG("ShaderPacks: failed to delete '{}'.", path);
+			}
+			PruneEmptyDirectories(install_dir);
+		}
+
+		// 5. Extract.
+		SetStatus(progress, fmt::format("Extracting {}...", pack->display_name));
+		std::vector<std::string> written;
+		const bool extracted = ShaderPackArchive::ExtractZipToDirectory(zip.get(), install_dir, pack->strip_components, progress, &written, &error);
+
+		// 6. Record whatever landed, so a retry or uninstall can clean up.
+		InstalledPack marker;
+		marker.id = id;
+		marker.version = version->version;
+		marker.source_url = version->download_url;
+		marker.installed_at = CurrentTimestamp();
+		marker.files.reserve(written.size());
+		for (const std::string& rel : written)
+			marker.files.push_back(fmt::format("{}/{}", pack->install_subdir, rel));
+		Error marker_error;
+		if (!WriteMarker(shaders_root, marker, &marker_error))
+			WARNING_LOG("ShaderPacks: {}", marker_error.GetDescription());
+
+		if (!extracted)
+		{
+			result.cancelled = (error.GetDescription() == "Cancelled.");
+			result.message = error.GetDescription();
+			if (result.cancelled)
+				break;
+			failed_ids.push_back(id);
+			continue;
+		}
+
+		result.success = true;
+		INFO_LOG("ShaderPacks: installed {} {} ({} files).", pack->display_name, version->version, written.size());
+	}
+
+	return results;
+}
+
+std::vector<ShaderPacks::InstallResult> ShaderPacks::Install(std::span<const std::string> ids, ProgressCallback* progress)
+{
+	return Install(EmuFolders::Shaders, ids, progress);
+}
+
+bool ShaderPacks::Uninstall(std::string_view id, Error* error)
+{
+	return Uninstall(EmuFolders::Shaders, id, error);
 }

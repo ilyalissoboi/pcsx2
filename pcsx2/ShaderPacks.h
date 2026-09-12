@@ -93,4 +93,19 @@ namespace ShaderPacks
 	/// Removes empty directories below and including dir, deepest first.
 	void PruneEmptyDirectories(const std::string& dir);
 
+	struct InstallResult
+	{
+		std::string id;
+		bool success = false;
+		bool cancelled = false;
+		std::string message; ///< error text, or empty on success
+	};
+
+	/// Installs or updates the packs (dependencies expanded and ordered) under shaders_root, reporting
+	/// through progress. Deletes a previously installed version only after the new archive has been
+	/// downloaded and validated.
+	std::vector<InstallResult> Install(const std::string& shaders_root, std::span<const std::string> ids, ProgressCallback* progress);
+	std::vector<InstallResult> Install(std::span<const std::string> ids, ProgressCallback* progress);
+	bool Uninstall(std::string_view id, Error* error);
+
 } // namespace ShaderPacks
