@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - librashader tag `librashader-v0.12.0`; `LIBRASHADER_CURRENT_ABI` must equal 2; `LIBRASHADER_CURRENT_VERSION` is 5.
-- Rust toolchain pinned to 1.88 in the deps scripts. No Rust in the PCSX2 build itself.
+- Rust toolchain pinned to 1.88 in the deps scripts, invoked as `rustup run 1.88 cargo ...` (the `cargo` proxy symlinks created by rustup 1.29 on Windows do not execute in SSH sessions). No Rust in the PCSX2 build itself.
 - Library is loaded at runtime only; never link an import library. File names `librashader.dll` (Windows, next to the exe) and `librashader.dylib` (macOS, `Contents/Frameworks`).
 - Cargo features: Windows `runtime-vulkan,runtime-d3d11,runtime-d3d12`; macOS `runtime-vulkan,runtime-metal`. Never enable `runtime-d3d9`.
 - Build targets in scope: Windows x64 and macOS arm64 only. Other targets must still compile and run with the feature reporting unavailable.
@@ -23,7 +23,34 @@
 - All new files carry the repo SPDX header: `// SPDX-FileCopyrightText: 2002-2026 PCSX2 Dev Team` / `// SPDX-License-Identifier: GPL-3.0+`.
 - Logging uses `ERROR_LOG`/`WARNING_LOG`/`INFO_LOG` from `common/Console.h` (fmt style). OSD uses `Host::AddIconOSDMessage(key, ICON_FA_TRIANGLE_EXCLAMATION, msg, Host::OSD_ERROR_DURATION)`.
 - Commit after every task with the message shown; end each commit message with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
-- Windows-only tasks (7, 11, 12) must be built and verified on a Windows x64 machine; on macOS they are edit-only and verified by a later Windows build.
+- Windows-only tasks (9, 10, 11) are built and verified on the Windows machine `pcsx2-win` over SSH; see "Windows Remote Workflow" below. Edits are made on the Mac and transferred as a git bundle.
+
+## Windows Remote Workflow
+
+The Windows x64 machine (VEGA, 192.168.68.64, user `ilya`, RTX 4090, Windows 11, Visual Studio 2026 18.10 with MSVC 14.51 and clang-cl 22.1, Windows SDK 10.0.26100, rustup 1.29) is reached from the Mac with the SSH alias `pcsx2-win` defined in `~/.ssh/config`. The remote shell is `cmd.exe`. The repo is cloned at `E:\work\pcsx2`; deps land in `E:\work\pcsx2\deps`. The user is logged in on the console, so interactive launches work through scheduled tasks.
+
+**Transfer the branch (no GitHub round-trip):**
+```bash
+cd ~/work/pcsx2 && git bundle create /tmp/sc.bundle master..feature/librashader-shader-chain && scp /tmp/sc.bundle pcsx2-win:E:/work/sc.bundle
+ssh pcsx2-win 'git -C E:\work\pcsx2 fetch E:\work\sc.bundle feature/librashader-shader-chain:feature/librashader-shader-chain && git -C E:\work\pcsx2 checkout feature/librashader-shader-chain'
+```
+For subsequent updates use `git bundle create /tmp/sc.bundle <last-transferred-sha>..feature/librashader-shader-chain` and `git -C E:\work\pcsx2 fetch E:\work\sc.bundle feature/librashader-shader-chain:feature/librashader-shader-chain` followed by `git -C E:\work\pcsx2 reset --hard feature/librashader-shader-chain` on the checked-out branch.
+
+**Build (always inside a fresh `cmd /c` with vcvars64, because `%VAR%` in a one-liner expands before vcvars runs):**
+```bash
+ssh pcsx2-win 'cmd /c ""C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat" && cd /d E:\work\pcsx2 && msbuild PCSX2_qt.slnx -m -p:Configuration="Release Clang" -p:Platform=x64 -v:m"'
+ssh pcsx2-win 'cmd /c ""C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat" && cd /d E:\work\pcsx2 && cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=E:\work\pcsx2\deps -DQT_BUILD=ON -DDISABLE_ADVANCE_SIMD=ON && cmake --build build --target unittests"'
+```
+Long jobs (the deps script) are started as a scheduled task so they survive the SSH session: a wrapper `E:\work\run-deps.cmd` sets `DEBUG=0`, calls `build-dependencies.bat < nul` (so the `pause` in its `:error` label cannot block) and redirects output to `E:\work\pcsx2-deps-build.log`; `schtasks /Create /TN pcsx2-deps /TR E:\work\run-deps.cmd /SC ONCE /ST 00:00 /F && schtasks /Run /TN pcsx2-deps`. Poll with `ssh pcsx2-win 'powershell -NoProfile -Command "Get-Content E:\work\pcsx2-deps-build.log -Tail 5"'`.
+
+**Run PCSX2 on the Windows desktop (SSH-spawned GUI processes are invisible):**
+```bash
+ssh pcsx2-win 'schtasks /Create /TN pcsx2-run /TR "E:\work\pcsx2\bin\pcsx2-qt.exe -batch E:\games\test.iso" /SC ONCE /ST 00:00 /RU ilya /IT /F && schtasks /Run /TN pcsx2-run'
+ssh pcsx2-win 'taskkill /IM pcsx2-qt.exe'
+```
+**Screen capture for visual checks (PCSX2 screenshots exclude the chain by design):** a scheduled interactive task runs `powershell -NoProfile -Command "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; $b=[System.Windows.Forms.Screen]::PrimaryScreen.Bounds; $bmp=New-Object System.Drawing.Bitmap $b.Width,$b.Height; $g=[System.Drawing.Graphics]::FromImage($bmp); $g.CopyFromScreen($b.Location,[System.Drawing.Point]::Empty,$b.Size); $bmp.Save('E:\\work\\shot.png')"`; then `scp pcsx2-win:E:/work/shot.png /tmp/shot.png` and inspect the PNG on the Mac.
+
+**Logs:** `scp pcsx2-win:C:/Users/Ilya/Documents/PCSX2/logs/emulog.txt /tmp/emulog-win.txt` (or `E:/work/pcsx2/bin/logs/emulog.txt` in portable mode).
 
 ## File Structure
 
@@ -1001,7 +1028,7 @@ rm -fr "librashader-$LIBRASHADER"
 git clone --depth 1 --branch "librashader-v$LIBRASHADER" https://github.com/SnowflakePowered/librashader.git "librashader-$LIBRASHADER"
 cd "librashader-$LIBRASHADER"
 # Only the runtimes PCSX2 uses on macOS. Never enable runtime-d3d9.
-cargo "+$LIBRASHADER_RUST" build -p librashader-capi --profile optimized --no-default-features --features runtime-vulkan,runtime-metal
+rustup run "$LIBRASHADER_RUST" cargo build -p librashader-capi --profile optimized --no-default-features --features runtime-vulkan,runtime-metal
 cp target/optimized/liblibrashader_capi.dylib "$INSTALLDIR/lib/librashader.dylib"
 install_name_tool -id @rpath/librashader.dylib "$INSTALLDIR/lib/librashader.dylib"
 codesign --force --sign - "$INSTALLDIR/lib/librashader.dylib"
@@ -1025,7 +1052,7 @@ This keeps the CI hash change deliberate and documents the gap.
 mkdir -p ~/deps/lib ~/deps/include && cd /tmp && rm -rf librashader-0.12.0 && \
 rustup toolchain install 1.88 --profile minimal && \
 git clone --depth 1 --branch librashader-v0.12.0 https://github.com/SnowflakePowered/librashader.git librashader-0.12.0 && cd librashader-0.12.0 && \
-cargo +1.88 build -p librashader-capi --profile optimized --no-default-features --features runtime-vulkan,runtime-metal && \
+rustup run 1.88 cargo build -p librashader-capi --profile optimized --no-default-features --features runtime-vulkan,runtime-metal && \
 cp target/optimized/liblibrashader_capi.dylib ~/deps/lib/librashader.dylib && install_name_tool -id @rpath/librashader.dylib ~/deps/lib/librashader.dylib && codesign --force --sign - ~/deps/lib/librashader.dylib && \
 otool -D ~/deps/lib/librashader.dylib && nm -gU ~/deps/lib/librashader.dylib | grep -c " _libra_" && nm -gU ~/deps/lib/librashader.dylib | grep -c "_libra_d3d"
 ```
@@ -2304,7 +2331,7 @@ rmdir /S /Q "librashader-%LIBRASHADER%" 2>nul
 git clone --depth 1 --branch "librashader-v%LIBRASHADER%" https://github.com/SnowflakePowered/librashader.git "librashader-%LIBRASHADER%" || goto error
 cd "librashader-%LIBRASHADER%" || goto error
 rem Only the runtimes PCSX2 uses on Windows. Never enable runtime-d3d9 (it drags in D3DX9_43.dll).
-cargo +%LIBRASHADER_RUST% build -p librashader-capi --profile optimized --no-default-features --features runtime-vulkan,runtime-d3d11,runtime-d3d12 || goto error
+rustup run %LIBRASHADER_RUST% cargo build -p librashader-capi --profile optimized --no-default-features --features runtime-vulkan,runtime-d3d11,runtime-d3d12 || goto error
 copy /Y "target\optimized\librashader_capi.dll" "%INSTALLDIR%\bin\librashader.dll" || goto error
 copy /Y "target\optimized\librashader_capi.pdb" "%INSTALLDIR%\bin\librashader.pdb"
 copy /Y "include\librashader.h" "%INSTALLDIR%\include\librashader.h" || goto error
