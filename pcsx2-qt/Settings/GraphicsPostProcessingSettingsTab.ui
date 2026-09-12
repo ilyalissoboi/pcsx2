@@ -256,7 +256,7 @@
       <string>Shader Chain (librashader)</string>
      </property>
      <layout class="QGridLayout" name="gridLayout_shaderChain">
-      <item row="0" column="0" colspan="4">
+      <item row="0" column="0" colspan="5">
        <widget class="QCheckBox" name="shaderChainEnabled">
         <property name="text">
          <string>Enable Shader Chain</string>
@@ -297,7 +297,14 @@
         </property>
        </widget>
       </item>
-      <item row="2" column="0" colspan="4">
+      <item row="1" column="4">
+       <widget class="QPushButton" name="shaderChainDownload">
+        <property name="text">
+         <string>Download Shader Packs...</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0" colspan="5">
        <widget class="QLabel" name="shaderChainStatus">
         <property name="text">
          <string/>
@@ -339,6 +346,7 @@
   <tabstop>shaderChainPreset</tabstop>
   <tabstop>shaderChainRefresh</tabstop>
   <tabstop>shaderChainOpenFolder</tabstop>
+  <tabstop>shaderChainDownload</tabstop>
  </tabstops>
  <resources/>
  <connections/>

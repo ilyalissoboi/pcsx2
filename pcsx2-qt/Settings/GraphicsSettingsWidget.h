@@ -47,6 +47,7 @@ private Q_SLOTS:
 	void onShaderChainEnabledChanged();
 	void onShaderChainRefreshClicked();
 	void onShaderChainOpenFolderClicked();
+	void onShaderChainDownloadClicked();
 	void onCaptureContainerChanged();
 	void onCaptureCodecChanged();
 	void onEnableVideoCaptureChanged();

@@ -143,6 +143,7 @@
       <Filter>Settings</Filter>
     </ClCompile>
     <ClCompile Include="CoverDownloadDialog.cpp" />
+    <ClCompile Include="ShaderPackDownloadDialog.cpp" />
     <ClCompile Include="ShortcutCreationDialog.cpp" />
     <ClCompile Include="QtProgressCallback.cpp" />
     <ClCompile Include="Settings\AchievementSettingsWidget.cpp">
@@ -400,6 +401,7 @@
     </QtMoc>
     <QtMoc Include="QtHost.h" />
     <QtMoc Include="CoverDownloadDialog.h" />
+    <QtMoc Include="ShaderPackDownloadDialog.h" />
     <QtMoc Include="QtProgressCallback.h" />
     <QtMoc Include="ShortcutCreationDialog.h" />
     <QtMoc Include="Settings\AchievementLoginDialog.h">
@@ -782,6 +784,7 @@
     <QtUi Include="AboutDialog.ui" />
     <QtUi Include="AutoUpdaterDialog.ui" />
     <QtUi Include="CoverDownloadDialog.ui" />
+    <QtUi Include="ShaderPackDownloadDialog.ui" />
     <QtUi Include="MainWindow.ui" />
     <QtUi Include="SetupWizardDialog.ui" />
     <QtUi Include="ShortcutCreationDialog.ui" />
