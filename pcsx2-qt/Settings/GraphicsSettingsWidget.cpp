@@ -12,6 +12,10 @@
 #include "pcsx2/GS/GS.h"
 #include "pcsx2/GS/GSCapture.h"
 #include "pcsx2/GS/GSUtil.h"
+#include "pcsx2/GS/ShaderChain/LibrashaderLoader.h"
+#include "pcsx2/GS/ShaderChain/ShaderPresets.h"
+#include "common/Path.h"
+#include <QtCore/QUrl>
 
 struct RendererInfo
 {
@@ -221,6 +225,31 @@ GraphicsSettingsWidget::GraphicsSettingsWidget(SettingsWindow* settings_dialog, 
 
 	connect(m_post.shadeBoost, &QCheckBox::checkStateChanged, this, &GraphicsSettingsWidget::onShadeBoostChanged);
 	onShadeBoostChanged();
+
+	// Shader chain (librashader). The combobox stores the relative preset path as item data;
+	// SettingAccessor<QComboBox>::getStringValue() prefers currentData() and setStringValue() uses findData().
+	populateShaderChainPresets(false);
+	SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_post.shaderChainEnabled, "EmuCore/GS", "ShaderChainEnabled", false);
+	SettingWidgetBinder::BindWidgetToStringSetting(sif, m_post.shaderChainPreset, "EmuCore/GS", "ShaderChainPreset", "");
+	connect(m_post.shaderChainEnabled, &QCheckBox::checkStateChanged, this, &GraphicsSettingsWidget::onShaderChainEnabledChanged);
+	connect(m_post.shaderChainRefresh, &QPushButton::clicked, this, &GraphicsSettingsWidget::onShaderChainRefreshClicked);
+	connect(m_post.shaderChainOpenFolder, &QPushButton::clicked, this, &GraphicsSettingsWidget::onShaderChainOpenFolderClicked);
+
+	{
+		const ShaderChain::Availability& avail = ShaderChain::GetAvailability();
+		if (!avail.available)
+		{
+			m_post.shaderChainGroup->setEnabled(false);
+			m_post.shaderChainGroup->setToolTip(QString::fromStdString(avail.reason));
+			m_post.shaderChainStatus->setText(tr("Shader chain unavailable: %1").arg(QString::fromStdString(avail.reason)));
+		}
+		else
+		{
+			m_post.shaderChainStatus->setText(tr("Presets are loaded from %1. Place RetroArch slang shader packs in a shaders_slang subfolder.")
+			                                     .arg(QString::fromStdString(EmuFolders::Shaders)));
+		}
+	}
+	onShaderChainEnabledChanged();
 
 	//////////////////////////////////////////////////////////////////////////
 	// Advanced Settings
@@ -728,6 +757,13 @@ GraphicsSettingsWidget::GraphicsSettingsWidget(SettingsWindow* settings_dialog, 
 
 		dialog()->registerWidgetHelp(m_post.tvShader, tr("TV Shader"), tr("None (Default)"),
 			tr("Applies a shader which replicates the visual effects of different styles of television sets."));
+
+		dialog()->registerWidgetHelp(m_post.shaderChainEnabled, tr("Enable Shader Chain"), tr("Unchecked"),
+			tr("Applies a RetroArch slang shader preset (.slangp) to the displayed image using librashader. Replaces CAS and the TV Shader while active. "
+			   "Screenshots, video captures and on-screen messages are not affected. Not supported by the OpenGL and Software renderers."));
+		dialog()->registerWidgetHelp(m_post.shaderChainPreset, tr("Preset"), tr("(None)"),
+			tr("Preset file to apply, relative to the Shaders folder. Presets that reference other shaders (for example the libretro shaders_slang pack) "
+			   "must be installed with their directory structure intact."));
 	}
 
 	// Recording tab
@@ -918,6 +954,44 @@ void GraphicsSettingsWidget::onShadeBoostChanged()
 	m_post.shadeBoostContrast->setEnabled(enabled);
 	m_post.shadeBoostGamma->setEnabled(enabled);
 	m_post.shadeBoostSaturation->setEnabled(enabled);
+}
+
+void GraphicsSettingsWidget::populateShaderChainPresets(bool add_global_item)
+{
+	// Preserve the current value across repopulation; the binder re-applies it on rebuild.
+	const QString current = m_post.shaderChainPreset->currentData().toString();
+	QSignalBlocker blocker(m_post.shaderChainPreset);
+	m_post.shaderChainPreset->clear();
+	if (add_global_item)
+	{
+		const std::string global_value = Host::GetBaseStringSettingValue("EmuCore/GS", "ShaderChainPreset", "");
+		m_post.shaderChainPreset->addItem(tr("Use Global Setting [%1]").arg(global_value.empty() ? tr("(None)") : QString::fromStdString(global_value)));
+	}
+	m_post.shaderChainPreset->addItem(tr("(None)"), QString());
+	for (const std::string& preset : ShaderPresets::Enumerate())
+	{
+		const QString qpreset = QString::fromStdString(preset);
+		m_post.shaderChainPreset->addItem(qpreset, qpreset);
+	}
+	const int index = m_post.shaderChainPreset->findData(current);
+	m_post.shaderChainPreset->setCurrentIndex(index >= 0 ? index : 0);
+}
+
+void GraphicsSettingsWidget::onShaderChainEnabledChanged()
+{
+	const bool enabled = dialog()->getEffectiveBoolValue("EmuCore/GS", "ShaderChainEnabled", false);
+	m_post.shaderChainPreset->setEnabled(enabled);
+	m_post.shaderChainRefresh->setEnabled(enabled);
+}
+
+void GraphicsSettingsWidget::onShaderChainRefreshClicked()
+{
+	populateShaderChainPresets(dialog()->isPerGameSettings());
+}
+
+void GraphicsSettingsWidget::onShaderChainOpenFolderClicked()
+{
+	QtUtils::OpenURL(this, QUrl::fromLocalFile(QString::fromStdString(EmuFolders::Shaders)));
 }
 
 void GraphicsSettingsWidget::onTextureDumpChanged()
