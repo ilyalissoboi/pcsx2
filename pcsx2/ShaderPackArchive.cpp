@@ -72,6 +72,12 @@ ShaderPackArchive::EntryDisposition ShaderPackArchive::TransformEntryName(std::s
 bool ShaderPackArchive::ExtractZipToDirectory(zip_t* zip, const std::string& dest_dir, u32 strip_components,
 	ProgressCallback* progress, std::vector<std::string>* written, Error* error)
 {
+	return ExtractZipToDirectoryWithLimits(zip, dest_dir, strip_components, progress, written, error, MAX_ENTRY_SIZE, MAX_TOTAL_SIZE);
+}
+
+bool ShaderPackArchive::ExtractZipToDirectoryWithLimits(zip_t* zip, const std::string& dest_dir, u32 strip_components,
+	ProgressCallback* progress, std::vector<std::string>* written, Error* error, size_t max_entry, size_t max_total)
+{
 	const zip_int64_t num_entries = zip_get_num_entries(zip, 0);
 	if (num_entries < 0)
 	{
@@ -93,6 +99,7 @@ bool ShaderPackArchive::ExtractZipToDirectory(zip_t* zip, const std::string& des
 
 	std::vector<u8> buffer;
 	std::string relative;
+	size_t total_size = 0;
 	for (zip_int64_t i = 0; i < num_entries; i++)
 	{
 		if (progress && progress->IsCancelled())
@@ -120,6 +127,15 @@ bool ShaderPackArchive::ExtractZipToDirectory(zip_t* zip, const std::string& des
 				break;
 		}
 
+		// The size comes from the archive, so cap it before allocating anything for it.
+		const size_t size = (st.valid & ZIP_STAT_SIZE) ? static_cast<size_t>(st.size) : 0;
+		if (size > max_entry || size > max_total - total_size)
+		{
+			Error::SetStringFmt(error, "Archive entry '{}' is too large ({} bytes).", st.name, size);
+			return false;
+		}
+		total_size += size;
+
 		std::string out_path = Path::Combine(dest_dir, relative);
 		const std::string canonical = Path::Canonicalize(out_path);
 		if (!canonical.starts_with(dest_prefix))
@@ -138,7 +154,6 @@ bool ShaderPackArchive::ExtractZipToDirectory(zip_t* zip, const std::string& des
 			Error::SetStringFmt(error, "Failed to open archive entry '{}'.", st.name);
 			return false;
 		}
-		const size_t size = (st.valid & ZIP_STAT_SIZE) ? static_cast<size_t>(st.size) : 0;
 		buffer.resize(size);
 		size_t total = 0;
 		while (total < size)

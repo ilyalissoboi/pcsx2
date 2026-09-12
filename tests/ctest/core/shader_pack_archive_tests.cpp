@@ -163,3 +163,57 @@ TEST(ShaderPackArchive, ExtractWithZeroStripKeepsFullPaths)
 	EXPECT_EQ(written[0], "retro crisis/4K Flat/RC - PS2.slangp");
 	EXPECT_EQ(ReadAll(Path::Combine(dest, "retro crisis/4K Flat/RC - PS2.slangp")), "#reference x");
 }
+
+TEST(ShaderPackArchive, ExtractRejectsOversizedEntry)
+{
+	TempRoot t;
+	ASSERT_FALSE(t.root().empty());
+	const std::string zip_path = MakeZip(t.root(), {
+		{"top/a.slang", "0123456789"},
+		{"top/b.slang", "0123456789"},
+	});
+	ASSERT_FALSE(zip_path.empty());
+	zip_error_t ze = {};
+
+	// The shipped caps let a normal archive through.
+	{
+		auto zip = zip_open_managed(zip_path.c_str(), ZIP_RDONLY, &ze);
+		ASSERT_TRUE(zip);
+		const std::string dest = Path::Combine(t.root(), "ok");
+		std::vector<std::string> written;
+		Error error;
+		ASSERT_TRUE(ShaderPackArchive::ExtractZipToDirectory(zip.get(), dest, 1, nullptr, &written, &error)) << error.GetDescription();
+		EXPECT_EQ(written.size(), 2u);
+		EXPECT_EQ(ReadAll(Path::Combine(dest, "a.slang")), "0123456789");
+	}
+
+	// A per-entry cap below the entry size aborts before anything is written. Real limits are far
+	// larger than any archive a test should create, hence the injected ones.
+	{
+		auto zip = zip_open_managed(zip_path.c_str(), ZIP_RDONLY, &ze);
+		ASSERT_TRUE(zip);
+		const std::string dest = Path::Combine(t.root(), "entry");
+		std::vector<std::string> written;
+		Error error;
+		EXPECT_FALSE(ShaderPackArchive::ExtractZipToDirectoryWithLimits(zip.get(), dest, 1, nullptr, &written, &error,
+			4, ShaderPackArchive::MAX_TOTAL_SIZE));
+		EXPECT_NE(error.GetDescription().find("a.slang"), std::string::npos) << error.GetDescription();
+		EXPECT_TRUE(written.empty());
+		EXPECT_FALSE(FileSystem::FileExists(Path::Combine(dest, "a.slang").c_str()));
+	}
+
+	// The running total stops the entry that would exceed it, keeping the earlier one.
+	{
+		auto zip = zip_open_managed(zip_path.c_str(), ZIP_RDONLY, &ze);
+		ASSERT_TRUE(zip);
+		const std::string dest = Path::Combine(t.root(), "total");
+		std::vector<std::string> written;
+		Error error;
+		EXPECT_FALSE(ShaderPackArchive::ExtractZipToDirectoryWithLimits(zip.get(), dest, 1, nullptr, &written, &error,
+			ShaderPackArchive::MAX_ENTRY_SIZE, 12));
+		EXPECT_NE(error.GetDescription().find("b.slang"), std::string::npos) << error.GetDescription();
+		ASSERT_EQ(written.size(), 1u);
+		EXPECT_EQ(written[0], "a.slang");
+		EXPECT_FALSE(FileSystem::FileExists(Path::Combine(dest, "b.slang").c_str()));
+	}
+}
