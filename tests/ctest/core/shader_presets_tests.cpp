@@ -109,6 +109,8 @@ TEST(ShaderPresets, ParameterStoreGenerationAndSnapshot)
 	ASSERT_EQ(params.size(), 2u);
 	EXPECT_EQ(params[0].first, "gamma");
 	EXPECT_FLOAT_EQ(params[0].second, 2.4f);
+	EXPECT_EQ(params[1].first, "mask");
+	EXPECT_FLOAT_EQ(params[1].second, 1.0f);
 
 	store.Set("shaders_slang/crt/a.slangp", {});
 	EXPECT_GT(store.GetGeneration(), g1);

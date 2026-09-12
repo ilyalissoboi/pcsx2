@@ -81,6 +81,8 @@ std::string ShaderPresets::ResolvePresetPathIn(const std::string& root, std::str
 	if (relative.empty() || root.empty())
 		return {};
 	// Reject absolute paths on any platform (leading slash, or drive letter).
+	// Path::IsAbsolute only recognises drive letters on Windows, but we need to reject them
+	// on all platforms because INI files can be copied between machines.
 	if (relative[0] == '/' || relative[0] == '\\' || Path::IsAbsolute(relative) ||
 		(relative.size() >= 2 && relative[1] == ':'))
 		return {};
