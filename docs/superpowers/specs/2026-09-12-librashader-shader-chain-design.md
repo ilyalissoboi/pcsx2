@@ -292,20 +292,33 @@ Automated (`tests/ctest/core`, gtest):
 
 Manual acceptance matrix (all on Windows x64 and macOS arm64 development machines):
 
-Not yet run: no PS2 BIOS or game image was available on either development machine when phase 1 was
-implemented; all rows are pending.
+The Windows rows were run on 2026-09-12 on the `pcsx2-win` development machine (Windows 11
+build 26200, Vulkan 1.4.329, D3D12 Agility SDK 619) using *Capcom vs. SNK 2 - Mark of the
+Millennium 2001* (USA, `SLUS-20246`) booted from a save state with the USA BIOS `scph39001.bin`,
+windowed at 2560x1440 with the OSD FPS and speed counters enabled. The macOS rows are still
+pending and follow separately; the BIOS and game image have been copied to the macOS machine.
 
 | Backend | 1-pass | LUT preset | Feedback preset (satpixie) | 18-pass RetroCrisis |
 |---|---|---|---|---|
-| Vulkan (Windows) | | | | |
-| Vulkan (macOS/MoltenVK) | | | | |
-| Metal | | | | |
-| D3D11 | | | | |
-| D3D12 | | | | |
+| Vulkan (Windows) | pass | pass | pass | pass |
+| Vulkan (macOS/MoltenVK) | pending | pending | pending | pending |
+| Metal | pending | pending | pending | pending |
+| D3D11 | pass | pass | pass | pass |
+| D3D12 | pass | pass | pass | pass |
+
+In every one of the twelve Windows cells the log carried `librashader loaded from ...
+(ABI 2, API 5)` followed by `ShaderChain(D3D11|D3D12|VK): loaded <preset>`, the CRT effect was
+visible over the game image, emulation held 100% speed, the OSD text stayed crisp and unshaded,
+and no `preset load failed`, `chain create failed`, `frame failed` or `did not render` line was
+emitted. A control run per backend with `ShaderChainEnabled = false` rendered normally. Renaming
+`librashader.dll` aside produced exactly one `Shader chain unavailable: ...` warning and a
+normally rendering, unshaded game at full speed.
 
 Plus, per backend: switch presets while running; toggle off/on; switch renderer with chain
 active; resize window; screenshot is unshaded; OSD is crisp; delete the library and confirm
-normal launch and a disabled UI group.
+normal launch and a disabled UI group. Of these, only the missing-library case has been
+exercised on Windows so far; the runtime switching, resize and F8 checks remain outstanding for
+every backend.
 
 Success criterion: the RetroCrisis 4K preset renders correctly at full speed on all five
 combinations, and PCSX2 launches and plays normally without the library.
