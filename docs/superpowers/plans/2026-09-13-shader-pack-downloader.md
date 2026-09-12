@@ -2730,3 +2730,223 @@ git commit -m "Qt: Add a searchable tree picker for shader presets and tidy the 
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
+
+---
+
+### Task 9: Preset display without a combobox; idle progress bar hidden (UAT round 2)
+
+**Files:**
+- Modify: `pcsx2-qt/Settings/GraphicsPostProcessingSettingsTab.ui` (the `shaderChainGroup` item and tab stops), `pcsx2-qt/Settings/GraphicsSettingsWidget.h` (slots, helper), `pcsx2-qt/Settings/GraphicsSettingsWidget.cpp` (bindings block, help text, shader chain functions)
+- Modify: `pcsx2-qt/ShaderPackDownloadDialog.cpp` (progress bar visibility)
+
+**Interfaces:**
+- Consumes: `SettingsWindow::getStringValue(section, key, std::optional<const char*>)` (nullopt when the layer has no value), `getEffectiveStringValue`, `setStringSettingValue(section, key, std::optional<const char*>)`, `removeSettingValue`, `isPerGameSettings()`; `Host::GetBaseStringSettingValue`; `ShaderPresetPickerDialog` (Task 8).
+- Produces: widgets `shaderChainPreset` (now a read-only `QLineEdit`), `shaderChainBrowse`, `shaderChainClear`, `shaderChainUseGlobal`; slots `onShaderChainClearClicked()`, `onShaderChainUseGlobalClicked()`; helper `updateShaderChainPresetDisplay()`; `setShaderChainPresetItems` removed.
+
+- [ ] **Step 1: Rework the group in the `.ui`**
+
+Replace the whole `shaderChainGroup` `<item>` with:
+```xml
+   <item>
+    <widget class="QGroupBox" name="shaderChainGroup">
+     <property name="title">
+      <string>Shader Chain (librashader)</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_shaderChain">
+      <item row="0" column="0" colspan="4">
+       <widget class="QCheckBox" name="shaderChainEnabled">
+        <property name="text">
+         <string>Enable Shader Chain</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="shaderChainPresetLabel">
+        <property name="text">
+         <string>Preset:</string>
+        </property>
+        <property name="buddy">
+         <cstring>shaderChainPreset</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QLineEdit" name="shaderChainPreset">
+        <property name="readOnly">
+         <bool>true</bool>
+        </property>
+        <property name="placeholderText">
+         <string>(None)</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="2">
+       <widget class="QPushButton" name="shaderChainBrowse">
+        <property name="text">
+         <string>Browse...</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="3">
+       <widget class="QPushButton" name="shaderChainClear">
+        <property name="text">
+         <string>Clear</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1" colspan="3">
+       <layout class="QHBoxLayout" name="shaderChainActionsLayout">
+        <item>
+         <widget class="QPushButton" name="shaderChainUseGlobal">
+          <property name="text">
+           <string>Use Global Setting</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="shaderChainOpenFolder">
+          <property name="text">
+           <string>Open Folder...</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="shaderChainDownload">
+          <property name="text">
+           <string>Download Shader Packs...</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="shaderChainActionsSpacer">
+          <property name="orientation">
+           <enum>Qt::Orientation::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>0</width>
+            <height>0</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+      <item row="3" column="0" colspan="4">
+       <widget class="QLabel" name="shaderChainStatus">
+        <property name="text">
+         <string/>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+```
+Tab stops for the group, in order: `shaderChainEnabled`, `shaderChainPreset`, `shaderChainBrowse`, `shaderChainClear`, `shaderChainUseGlobal`, `shaderChainOpenFolder`, `shaderChainDownload`.
+
+- [ ] **Step 2: Header**
+
+In `GraphicsSettingsWidget.h`: add slots `void onShaderChainClearClicked();` and `void onShaderChainUseGlobalClicked();` next to `onShaderChainBrowseClicked()`; replace `void setShaderChainPresetItems(bool add_global_item, const QString& current);` with `void updateShaderChainPresetDisplay();`.
+
+- [ ] **Step 3: Source**
+
+Bindings block: replace the comment, the `setShaderChainPresetItems(...)` call and the `BindWidgetToStringSetting(... "ShaderChainPreset" ...)` line with:
+```cpp
+	// Shader chain (librashader). The preset is shown in a read-only field and written directly through the
+	// settings window (per-game layer or global), so no SettingWidgetBinder is involved.
+	m_post.shaderChainUseGlobal->setVisible(dialog()->isPerGameSettings());
+```
+Keep the `ShaderChainEnabled` bool binding and the existing connects; add:
+```cpp
+	connect(m_post.shaderChainClear, &QPushButton::clicked, this, &GraphicsSettingsWidget::onShaderChainClearClicked);
+	connect(m_post.shaderChainUseGlobal, &QPushButton::clicked, this, &GraphicsSettingsWidget::onShaderChainUseGlobalClicked);
+```
+and after `updateShaderChainAvailability();` add `updateShaderChainPresetDisplay();` (before `onShaderChainEnabledChanged();`).
+
+Help text: keep the preset entry (it now describes the field) and add:
+```cpp
+		dialog()->registerWidgetHelp(m_post.shaderChainClear, tr("Clear"), tr("N/A"),
+			tr("Removes the preset so no shader chain is applied."));
+		dialog()->registerWidgetHelp(m_post.shaderChainUseGlobal, tr("Use Global Setting"), tr("N/A"),
+			tr("Drops this game's preset override and uses the global setting again."));
+```
+
+Replace `setShaderChainPresetItems`, `onShaderChainEnabledChanged` and `onShaderChainBrowseClicked` with:
+```cpp
+void GraphicsSettingsWidget::updateShaderChainPresetDisplay()
+{
+	const bool per_game = dialog()->isPerGameSettings();
+	const std::optional<std::string> layer_value = dialog()->getStringValue("EmuCore/GS", "ShaderChainPreset", std::nullopt);
+	if (per_game && !layer_value.has_value())
+	{
+		const std::string global_value = Host::GetBaseStringSettingValue("EmuCore/GS", "ShaderChainPreset", "");
+		m_post.shaderChainPreset->clear();
+		m_post.shaderChainPreset->setPlaceholderText(
+			tr("Use Global Setting [%1]").arg(global_value.empty() ? tr("(None)") : QString::fromStdString(global_value)));
+		m_post.shaderChainUseGlobal->setEnabled(false);
+		return;
+	}
+
+	m_post.shaderChainPreset->setText(QString::fromStdString(layer_value.value_or(std::string())));
+	m_post.shaderChainPreset->setPlaceholderText(tr("(None)"));
+	m_post.shaderChainUseGlobal->setEnabled(per_game);
+}
+
+void GraphicsSettingsWidget::onShaderChainEnabledChanged()
+{
+	const bool enabled = dialog()->getEffectiveBoolValue("EmuCore/GS", "ShaderChainEnabled", false);
+	m_post.shaderChainPreset->setEnabled(enabled);
+	m_post.shaderChainBrowse->setEnabled(enabled);
+	m_post.shaderChainClear->setEnabled(enabled);
+	m_post.shaderChainUseGlobal->setEnabled(enabled && dialog()->isPerGameSettings() &&
+	                                        dialog()->containsSettingValue("EmuCore/GS", "ShaderChainPreset"));
+}
+
+void GraphicsSettingsWidget::onShaderChainBrowseClicked()
+{
+	ShaderPresetPickerDialog dlg(this, QString::fromStdString(dialog()->getEffectiveStringValue("EmuCore/GS", "ShaderChainPreset", "")));
+	if (dlg.exec() != QDialog::Accepted || dlg.selectedPreset().isEmpty())
+		return;
+
+	const std::string preset = dlg.selectedPreset().toStdString();
+	dialog()->setStringSettingValue("EmuCore/GS", "ShaderChainPreset", preset.c_str());
+	updateShaderChainPresetDisplay();
+	onShaderChainEnabledChanged();
+}
+
+void GraphicsSettingsWidget::onShaderChainClearClicked()
+{
+	dialog()->setStringSettingValue("EmuCore/GS", "ShaderChainPreset", "");
+	updateShaderChainPresetDisplay();
+	onShaderChainEnabledChanged();
+}
+
+void GraphicsSettingsWidget::onShaderChainUseGlobalClicked()
+{
+	dialog()->removeSettingValue("EmuCore/GS", "ShaderChainPreset");
+	updateShaderChainPresetDisplay();
+	onShaderChainEnabledChanged();
+}
+```
+`updateShaderChainPresetDisplay()` sets the Use Global button's enabled state from the override's presence, and `onShaderChainEnabledChanged()` then folds in the master enable; the order of the two calls in the constructor and in the handlers above keeps them consistent. `#include <optional>` if not already present.
+
+- [ ] **Step 4: Downloader progress bar**
+
+In `ShaderPackDownloadDialog.cpp`: in the constructor, before starting the Resolve worker, `m_ui.progress->setVisible(false);`; in `startWorker`, after `m_ui.progress->setValue(0);`, `m_ui.progress->setVisible(mode != Mode::Resolve);`; in `onWorkerFinished` (after `m_worker.reset()`) and in `cancelWorker` (after `m_worker.reset()`), `m_ui.progress->setVisible(false);`.
+
+- [ ] **Step 5: Build, launch, Windows compile**
+
+macOS: `cmake --build build-sc --target pcsx2-qt 2>&1 | grep -E " error|warning: " | grep -i "GraphicsSettings\|ShaderPack"; cmake --build build-sc --target pcsx2-qt 2>&1 | tail -1`; launch/quit check as in Task 8. Windows: bundle transfer + `schtasks /Run /TN pcsx2-build` + poll for `EXIT_CODE=0`.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add pcsx2-qt/Settings/GraphicsPostProcessingSettingsTab.ui pcsx2-qt/Settings/GraphicsSettingsWidget.h pcsx2-qt/Settings/GraphicsSettingsWidget.cpp pcsx2-qt/ShaderPackDownloadDialog.cpp
+git commit -m "Qt: Show the shader preset in a text field and hide the idle download progress bar
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```

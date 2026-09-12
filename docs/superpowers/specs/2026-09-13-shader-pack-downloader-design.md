@@ -221,12 +221,15 @@ the development Mac). Chosen design: a **tree picker dialog with search**.
   shows every preset whose relative path contains `crt`, expanded. OK is enabled only for a leaf;
   double-click or Enter on a leaf accepts. The dialog opens with the current preset selected and its
   folders expanded.
-- The Shader Chain group keeps the bound `QComboBox` (per-game "Use Global Setting" relies on the
-  combobox binder) but it now lists only the per-game item, "(None)" and the current preset; a
-  **Browse...** button opens the picker and, on accept, replaces the preset item and selects it so the
-  binder saves the value. The Refresh button is removed (the picker enumerates on open). Layout: row 0
-  enable checkbox; row 1 Preset label, combobox, Browse...; row 2 Open Folder..., Download Shader
-  Packs...; row 3 status.
+- The Shader Chain group shows the current preset in a read-only text field (second UAT round replaced
+  the interim combobox): placeholder "(None)" when empty, or "Use Global Setting [<global>]" in a
+  per-game dialog without an override. **Browse...** opens the picker and writes the choice through
+  `SettingsWindow::setStringSettingValue` (per-game layer or global, hot-applied); **Clear** writes an
+  empty value; **Use Global Setting** (per-game dialogs only) removes the override with
+  `removeSettingValue`. No `SettingWidgetBinder` is involved. The Refresh button is removed (the picker
+  enumerates on open). Layout: row 0 enable checkbox; row 1 Preset label, text field, Browse..., Clear;
+  row 2 Use Global Setting (per-game only), Open Folder..., Download Shader Packs...; row 3 status.
+- Downloader dialog: the progress bar is visible only while an install or uninstall runs.
 
 ## 8. Error handling summary
 
@@ -273,7 +276,9 @@ Results (2026-09-13, user acceptance on the Mac build `build-sc/pcsx2-qt/PCSX2.a
   uninstall, Retro Crisis auto-selecting the libretro pack, Escape while checking, cancel mid-extraction
   showing "incomplete", offline behaviour): **all passed**.
 - Two UI change requests, addressed by plan Task 8: move "Download Shader Packs..." to its own row; replace
-  the flat preset combobox with a structured picker (section 7.1).
+  the flat preset combobox with a structured picker (section 7.1). Second round (Task 9): the tree picker
+  works on both machines; the current preset is shown in a text field instead of a combobox; the
+  downloader's progress bar is hidden when idle.
 - Windows D3D12 load of a downloaded Retro Crisis preset (item 8): not run yet.
 
 Success criterion: a fresh PCSX2 data directory reaches a working RetroCrisis preset on both
