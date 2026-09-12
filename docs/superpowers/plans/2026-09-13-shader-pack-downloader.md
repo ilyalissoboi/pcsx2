@@ -68,7 +68,7 @@ namespace ShaderPacks {
 }
 ```
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/ctest/core/shader_packs_tests.cpp`:
 ```cpp
@@ -206,12 +206,12 @@ add_pcsx2_test(core_test
 )
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cd ~/work/pcsx2 && cmake --build build-sc --target core_test 2>&1 | grep -m1 -i error`
 Expected: `ShaderPacks.h` file not found.
 
-- [ ] **Step 3: Implement the registry and markers**
+- [x] **Step 3: Implement the registry and markers**
 
 Create `pcsx2/ShaderPacks.h`:
 ```cpp
@@ -436,12 +436,12 @@ Registration:
 - `pcsx2/pcsx2.vcxproj`: add `<ClCompile Include="ShaderPacks.cpp" />` next to `GameList.cpp` and `<ClInclude Include="ShaderPacks.h" />` next to `GameList.h`; extend the include-dir line at line 40 with `;$(SolutionDir)3rdparty\rapidjson\include` (same pattern `pcsx2-qt.vcxproj:51` uses).
 - `pcsx2/pcsx2.vcxproj.filters`: both entries under `<Filter>Misc</Filter>`, like `GameList.*`.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd ~/work/pcsx2 && cmake --build build-sc --target core_test 2>&1 | tail -1 && $(find build-sc -name core_test -type f -perm +111) --gtest_filter='ShaderPacks.*'`
 Expected: `[  PASSED  ] 4 tests.`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add pcsx2/ShaderPacks.h pcsx2/ShaderPacks.cpp tests/ctest/core/shader_packs_tests.cpp tests/ctest/core/CMakeLists.txt pcsx2/CMakeLists.txt pcsx2/pcsx2.vcxproj pcsx2/pcsx2.vcxproj.filters
@@ -471,7 +471,7 @@ namespace ShaderPacks {
 }
 ```
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/ctest/core/shader_packs_tests.cpp`:
 ```cpp
@@ -530,12 +530,12 @@ TEST(ShaderPacks, VersionUrlsFollowGitHubApi)
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd ~/work/pcsx2 && cmake --build build-sc --target core_test 2>&1 | grep -m1 -i error`
 Expected: `ParseCommitJson` is not a member of `ShaderPacks`.
 
-- [ ] **Step 3: Implement parsing and resolution**
+- [x] **Step 3: Implement parsing and resolution**
 
 Append to the `ShaderPacks` namespace in `pcsx2/ShaderPacks.h`:
 ```cpp
@@ -674,12 +674,12 @@ std::optional<ShaderPacks::ResolvedVersion> ShaderPacks::ResolveLatest(const Pac
 ```
 `HTTPDownloader::HTTP_STATUS_OK` and `Request::Data` are declared in `common/HTTPDownloader.h`; `Error::SetStringView` / `Error::SetStringFmt` are static helpers in `common/Error.h` that accept a null `Error*`.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd ~/work/pcsx2 && cmake --build build-sc --target core_test 2>&1 | tail -1 && $(find build-sc -name core_test -type f -perm +111) --gtest_filter='ShaderPacks.*'`
 Expected: `[  PASSED  ] 8 tests.`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add pcsx2/ShaderPacks.h pcsx2/ShaderPacks.cpp tests/ctest/core/shader_packs_tests.cpp
@@ -711,7 +711,7 @@ namespace ShaderPackArchive {
 }
 ```
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/ctest/core/shader_pack_archive_tests.cpp`:
 ```cpp
@@ -883,12 +883,12 @@ TEST(ShaderPackArchive, ExtractWithZeroStripKeepsFullPaths)
 ```
 Add `shader_pack_archive_tests.cpp` to the `add_pcsx2_test(core_test ...)` list in `tests/ctest/core/CMakeLists.txt`. `core_test` already links `PCSX2`, which links `libzip::zip`; if the test target cannot see `zip.h`, add `target_link_libraries(core_test PRIVATE libzip::zip)` below the existing `target_link_libraries(core_test PUBLIC ...)` block.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd ~/work/pcsx2 && cmake --build build-sc --target core_test 2>&1 | grep -m1 -i error`
 Expected: `ShaderPackArchive.h` file not found.
 
-- [ ] **Step 3: Implement the archive module**
+- [x] **Step 3: Implement the archive module**
 
 Create `pcsx2/ShaderPackArchive.h`:
 ```cpp
@@ -974,7 +974,7 @@ ShaderPackArchive::EntryDisposition ShaderPackArchive::TransformEntryName(std::s
 			Error::SetStringFmt(error, "Refusing unsafe archive entry '{}'.", entry_name);
 			return EntryDisposition::Reject;
 		}
-		if (!part.empty())
+		if (!part.empty() && part != ".")
 			parts.push_back(part);
 		if (end == std::string_view::npos)
 			break;
@@ -984,9 +984,9 @@ ShaderPackArchive::EntryDisposition ShaderPackArchive::TransformEntryName(std::s
 	if (is_directory || parts.size() <= strip_components)
 		return EntryDisposition::Skip;
 
-	for (size_t i = strip_components; i < parts.size(); i++)
+	for (const auto& part : parts)
 	{
-		if (parts[i] == "__MACOSX")
+		if (part == "__MACOSX")
 			return EntryDisposition::Skip;
 	}
 	if (parts.back() == ".DS_Store")
@@ -1016,9 +1016,10 @@ bool ShaderPackArchive::ExtractZipToDirectory(zip_t* zip, const std::string& des
 		return false;
 
 	// Canonical destination prefix used to double-check every output path.
+	// Prefix must use the native separator because Canonicalize does.
 	std::string dest_prefix = Path::Canonicalize(dest_dir);
 	if (!dest_prefix.empty() && dest_prefix.back() != '/' && dest_prefix.back() != '\\')
-		dest_prefix.push_back('/');
+		dest_prefix.push_back(FS_OSPATH_SEPARATOR_CHARACTER);
 
 	if (progress)
 		progress->SetProgressRange(static_cast<u32>(num_entries));
@@ -1101,16 +1102,16 @@ bool ShaderPackArchive::ExtractZipToDirectory(zip_t* zip, const std::string& des
 	return true;
 }
 ```
-On Windows `Path::Canonicalize` returns backslash separators; the prefix comparison works because both sides come from `Path::Canonicalize` of paths built with `Path::Combine`.
+On Windows `Path::Canonicalize` returns backslash separators, so the prefix is terminated with `FS_OSPATH_SEPARATOR_CHARACTER` rather than a literal `'/'`; the comparison then works because both sides come from `Path::Canonicalize` of paths built with `Path::Combine`. Archive entries are compared component by component, so `__MACOSX` is caught wherever it appears (including in the stripped prefix), and `.` components are dropped like empty ones.
 
 Register `ShaderPackArchive.cpp` / `.h` in `pcsx2/CMakeLists.txt` (next to `ShaderPacks.*`), `pcsx2/pcsx2.vcxproj` and `pcsx2/pcsx2.vcxproj.filters` (filter `Misc`).
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd ~/work/pcsx2 && cmake --build build-sc --target core_test 2>&1 | tail -1 && $(find build-sc -name core_test -type f -perm +111) --gtest_filter='ShaderPackArchive.*'`
 Expected: `[  PASSED  ] 4 tests.`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add pcsx2/ShaderPackArchive.h pcsx2/ShaderPackArchive.cpp tests/ctest/core/shader_pack_archive_tests.cpp tests/ctest/core/CMakeLists.txt pcsx2/CMakeLists.txt pcsx2/pcsx2.vcxproj pcsx2/pcsx2.vcxproj.filters
@@ -1142,7 +1143,7 @@ namespace ShaderPacks {
 }
 ```
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/ctest/core/shader_packs_tests.cpp`:
 ```cpp
@@ -1214,12 +1215,12 @@ TEST(ShaderPacks, UninstallDeletesListedFilesOnly)
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd ~/work/pcsx2 && cmake --build build-sc --target core_test 2>&1 | grep -m1 -i error`
 Expected: `ExpandDependencies` is not a member of `ShaderPacks`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Append to the namespace in `pcsx2/ShaderPacks.h`:
 ```cpp
@@ -1317,12 +1318,12 @@ bool ShaderPacks::Uninstall(const std::string& shaders_root, std::string_view id
 ```
 `FILESYSTEM_FIND_DATA::FileName` holds the full path when `FILESYSTEM_FIND_RELATIVE_PATHS` is not set (see `common/FileSystem.h:54-65`).
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd ~/work/pcsx2 && cmake --build build-sc --target core_test 2>&1 | tail -1 && $(find build-sc -name core_test -type f -perm +111) --gtest_filter='ShaderPacks.*'`
 Expected: `[  PASSED  ] 10 tests.`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add pcsx2/ShaderPacks.h pcsx2/ShaderPacks.cpp tests/ctest/core/shader_packs_tests.cpp
@@ -1353,7 +1354,7 @@ namespace ShaderPacks {
 ```
 No unit test exercises the network; the pieces it composes are tested in Tasks 1-4 and the whole is verified through the dialog in Task 7. The gate is a clean core build.
 
-- [ ] **Step 1: Declare**
+- [x] **Step 1: Declare**
 
 Append to the namespace in `pcsx2/ShaderPacks.h`:
 ```cpp
@@ -1373,7 +1374,7 @@ Append to the namespace in `pcsx2/ShaderPacks.h`:
 	bool Uninstall(std::string_view id, Error* error);
 ```
 
-- [ ] **Step 2: Implement**
+- [x] **Step 2: Implement**
 
 Append to `pcsx2/ShaderPacks.cpp` (add `#include "ShaderPackArchive.h"`, `#include "Host.h"`, `#include "common/ProgressCallback.h"`, `#include "common/Threading.h"`, `#include "common/ZipHelpers.h"`, `#include <thread>`, `#include <chrono>`):
 ```cpp
@@ -1571,12 +1572,12 @@ bool ShaderPacks::Uninstall(std::string_view id, Error* error)
 ```
 Notes: `HTTPDownloader` only drives `SetProgressRange/Value` when the server sends a size, so GitHub downloads show the "Downloading..." text without a percentage and the size appears once complete (spec section 6 step 2 accepts this). A cancelled download surfaces as `HTTP_STATUS_CANCELLED` through the callback because `LockedPollRequests` checks `progress->IsCancelled()`.
 
-- [ ] **Step 3: Build**
+- [x] **Step 3: Build**
 
 Run: `cd ~/work/pcsx2 && cmake --build build-sc --target PCSX2 2>&1 | grep -E "error|warning: " | grep -i shaderpack; cmake --build build-sc --target core_test 2>&1 | tail -1 && $(find build-sc -name core_test -type f -perm +111) --gtest_filter='ShaderPack*'`
-Expected: no errors or warnings in `ShaderPacks.cpp`; `[  PASSED  ] 14 tests.` (10 ShaderPacks + 4 ShaderPackArchive).
+Expected: no errors or warnings in `ShaderPacks.cpp`; `[  PASSED  ] 19 tests.` (14 ShaderPacks + 5 ShaderPackArchive).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add pcsx2/ShaderPacks.h pcsx2/ShaderPacks.cpp
@@ -1600,7 +1601,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 No automated UI test; the gate is a clean `pcsx2-qt` build plus a launch/quit check. The click-through happens in Task 7.
 
-- [ ] **Step 1: Create the dialog `.ui`**
+- [x] **Step 1: Create the dialog `.ui`**
 
 `pcsx2-qt/ShaderPackDownloadDialog.ui`:
 ```xml
@@ -1727,7 +1728,7 @@ No automated UI test; the gate is a clean `pcsx2-qt` build plus a launch/quit ch
 </ui>
 ```
 
-- [ ] **Step 2: Create the dialog header**
+- [x] **Step 2: Create the dialog header**
 
 `pcsx2-qt/ShaderPackDownloadDialog.h`:
 ```cpp
@@ -1815,7 +1816,7 @@ private:
 };
 ```
 
-- [ ] **Step 3: Create the dialog implementation**
+- [x] **Step 3: Create the dialog implementation**
 
 `pcsx2-qt/ShaderPackDownloadDialog.cpp`:
 ```cpp
@@ -2156,7 +2157,7 @@ void ShaderPackDownloadDialog::Worker::runAsync()
 ```
 `EmuFolders::Shaders` needs `#include "pcsx2/Config.h"`; add it to the includes.
 
-- [ ] **Step 4: Add the button to the Post-Processing tab and wire it**
+- [x] **Step 4: Add the button to the Post-Processing tab and wire it**
 
 In `GraphicsPostProcessingSettingsTab.ui`, inside `gridLayout_shaderChain`: change the `shaderChainEnabled` item (row 0) and the `shaderChainStatus` item (row 2) from `colspan="4"` to `colspan="5"`, and add after the `shaderChainOpenFolder` item:
 ```xml
@@ -2192,18 +2193,18 @@ Add help text next to the existing shader chain `registerWidgetHelp` calls:
 			   "and keeps them up to date."));
 ```
 
-- [ ] **Step 5: Register the new files**
+- [x] **Step 5: Register the new files**
 
 - `pcsx2-qt/CMakeLists.txt`: after `CoverDownloadDialog.ui` (line 22) add `ShaderPackDownloadDialog.cpp`, `ShaderPackDownloadDialog.h`, `ShaderPackDownloadDialog.ui` (keep the list's alphabetical block style).
 - `pcsx2-qt/pcsx2-qt.vcxproj`: `<ClCompile Include="ShaderPackDownloadDialog.cpp" />` beside the CoverDownloadDialog `ClCompile` (line 176), `<QtMoc Include="ShaderPackDownloadDialog.h" />` beside line 278, `<QtUi Include="ShaderPackDownloadDialog.ui" />` beside line 296.
 - `pcsx2-qt/pcsx2-qt.vcxproj.filters`: the same three entries in the same groups as `CoverDownloadDialog.*` (lines 145, 402, 784), with identical `<Filter>` children if those entries have any.
 
-- [ ] **Step 6: Build and launch check**
+- [x] **Step 6: Build and launch check**
 
 Run: `cd ~/work/pcsx2 && cmake --build build-sc --target pcsx2-qt 2>&1 | grep -E " error|warning: " | grep -i "ShaderPack\|GraphicsSettings"; cmake --build build-sc --target pcsx2-qt 2>&1 | tail -1`
 Expected: no errors or warnings in the touched files. Then `open build-sc/pcsx2-qt/PCSX2.app`, wait 10 s, `osascript -e 'quit app "PCSX2"'`, and confirm no new PCSX2 entry in `ls -t ~/Library/Logs/DiagnosticReports | head -3`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add pcsx2-qt/ShaderPackDownloadDialog.h pcsx2-qt/ShaderPackDownloadDialog.cpp pcsx2-qt/ShaderPackDownloadDialog.ui pcsx2-qt/Settings/GraphicsPostProcessingSettingsTab.ui pcsx2-qt/Settings/GraphicsSettingsWidget.h pcsx2-qt/Settings/GraphicsSettingsWidget.cpp pcsx2-qt/CMakeLists.txt pcsx2-qt/pcsx2-qt.vcxproj pcsx2-qt/pcsx2-qt.vcxproj.filters
@@ -2221,7 +2222,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 **Interfaces:** none (verification only).
 
-- [ ] **Step 1: Windows compile and unit tests**
+- [x] **Step 1: Windows compile and unit tests**
 
 Transfer and build with MSBuild exactly as the phase 1 plan's "Windows Remote Workflow" describes (bundle `master..feature/shader-pack-downloader`, `git -C E:\work\pcsx2 fetch E:\work\sc.bundle feature/shader-pack-downloader && git -C E:\work\pcsx2 checkout -B feature/shader-pack-downloader FETCH_HEAD`, then `schtasks /Run /TN pcsx2-build` and poll `E:\work\pcsx2-build.log` for `EXIT_CODE=0`).
 
@@ -2235,13 +2236,13 @@ cmake --build build-tests --target core_test
 build-tests\tests\ctest\core\core_test.exe --gtest_filter=ShaderPack*
 echo EXIT_CODE=%ERRORLEVEL%
 ```
-Run it with `schtasks /Create /TN pcsx2-tests /TR E:\work\run-tests.cmd /SC ONCE /ST 00:00 /F && schtasks /Run /TN pcsx2-tests`, poll the log until `EXIT_CODE=`, and expect `[  PASSED  ] 14 tests.` and `EXIT_CODE=0`. (The first configure builds much of the core for the test target; allow 10-15 minutes.) If `core_test.exe` is produced under a different directory, locate it with `dir /s /b E:\work\pcsx2\build-tests\core_test.exe`.
+Run it with `schtasks /Create /TN pcsx2-tests /TR E:\work\run-tests.cmd /SC ONCE /ST 00:00 /F && schtasks /Run /TN pcsx2-tests`, poll the log until `EXIT_CODE=`, and expect `[  PASSED  ] 19 tests.` and `EXIT_CODE=0`. (The first configure builds much of the core for the test target; allow 10-15 minutes.) If `core_test.exe` is produced under a different directory, locate it with `dir /s /b E:\work\pcsx2\build-tests\core_test.exe`.
 
-- [ ] **Step 2: Mac unit tests and app build**
+- [x] **Step 2: Mac unit tests and app build**
 
 Run: `cd ~/work/pcsx2 && cmake --build build-sc --target unittests 2>&1 | grep -E "tests passed|Failed"` — expect `100% tests passed`.
 
-- [ ] **Step 3: Manual click-through (user-driven)**
+- [x] **Step 3: Manual click-through (user-driven)**
 
 The dialog cannot be driven by the automation available on either machine, so hand this checklist to the user with the app built at `build-sc/pcsx2-qt/PCSX2.app` (Mac) and `E:\work\pcsx2\bin\pcsx2-qtx64-clang.exe` (Windows), and collect the outcomes:
 
@@ -2253,7 +2254,7 @@ The dialog cannot be driven by the automation available on either machine, so ha
 6. Disable networking, open the dialog: statuses read "could not check"; Install reports the version-check error and leaves files alone.
 7. Windows only: with the packs installed via the dialog, enable the chain with `shaders_slang/retro crisis/4K Flat/RC GDV-NTSC - PS2 - Clean.slangp` on D3D12 and start a game; the effect renders and `emulog.txt` shows `ShaderChain(D3D12): loaded`.
 
-- [ ] **Step 4: Record results and commit**
+- [x] **Step 4: Record results and commit**
 
 In spec section 9 add a "Results" list with the date, machine, and pass/fail per item above (mark items the user did not run as "not run"). Commit:
 ```bash

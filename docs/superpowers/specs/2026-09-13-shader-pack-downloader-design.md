@@ -94,8 +94,17 @@ std::optional<ResolvedVersion> ResolveLatest(const PackInfo& pack, HTTPDownloade
   `version`; the first element of `assets[]` whose `name` ends with `.zip` and (if `asset_exclude`
   is set) does not contain it; `browser_download_url` as `download_url`. No matching asset is an
   error.
-- Requests use `Host::GetHTTPUserAgent()` (GitHub requires a User-Agent) and the downloader's
-  default 30 s timeout. JSON is parsed with rapidjson into plain structs; the parsing function
+- The request runs synchronously on the calling thread: `CreateRequest`, then poll until the
+  callback fires. `progress` may be null; when it is not it is attached to the request, so
+  cancelling it aborts the wait ("Cancelled."). The same poll helper is used for the archive
+  download and gives up with "Failed to start the request." when `CreateRequest` never queued
+  anything, so a failed request cannot hang the wait until the timeout.
+- Requests use `Host::GetHTTPUserAgent()` (GitHub requires a User-Agent). The downloader's timeout
+  covers total elapsed time, not per-transfer idle time, so `Install` sets it per step: 30 s around
+  resolution, 600 s around the download. HTTP 403 (unauthenticated GitHub API calls are rate
+  limited per IP) is reported as "GitHub API rate limit reached; try again later."; any other
+  non-200 status as "Version check for <name> failed (HTTP <n>).".
+- JSON is parsed with rapidjson into plain structs; the parsing functions
   `ParseReleaseJson(std::string_view json, const char* asset_exclude, Error*)` and
   `ParseCommitJson(std::string_view json, Error*)` are pure and unit-tested.
 - Resolution runs when the dialog opens (one request per pack) and again inside `Install`.
@@ -134,24 +143,30 @@ bool ExtractZipToDirectory(zip_t* zip, const std::string& dest_dir, u32 strip_co
 
 Per pack, each step is a `ProgressCallback` status text:
 1. **Resolve** ("Checking <name>..."). Failure: record message, skip pack, continue.
-2. **Download** ("Downloading <name> (12.3 MB)..."): one `CreateRequest` with `progress`
-   attached; `PollRequests()` loop with a short sleep until the callback fired; `IsCancelled()`
-   aborts (HTTPDownloader cancels the request). Non-200 or empty body: skip pack.
+2. **Download** ("Downloading <name>..."): one `CreateRequest` with `progress` attached; the same
+   poll loop as resolution; `IsCancelled()` aborts (HTTPDownloader cancels the request). Non-200 or
+   empty body: skip pack. The size is only known once the body has arrived, so it is reported
+   afterwards as "Downloaded <name> (12.3 MB).".
 3. **Validate**: `zip_open_buffer_managed`; failure: skip pack. Nothing on disk has changed yet.
 4. **Remove previous** (only if a marker exists): delete each listed file that exists, then prune
    directories under `<Shaders>/<install_subdir>` that became empty. Failures are logged and do not
    stop the install.
-5. **Extract** ("Extracting <name> (n/N)...") into `<Shaders>/<install_subdir>` with
-   `strip_components`. Per entry: split on '/'; drop the first `strip_components` segments; skip
-   if nothing remains, if the entry is a directory, if any segment is `__MACOSX`, or if the file
-   name is `.DS_Store`; reject (abort this pack) if the original name is absolute, contains `\`,
-   or any segment is `..`, or if `Path::Canonicalize(dest + rel)` does not start with `dest`.
-   Create parent directories, write with `FileSystem::WriteBinaryFile`, append the path
-   (relative to `dest_dir`; `Install` prefixes `install_subdir` so marker entries are relative to
-   the Shaders folder) to the written list, advance progress.
+5. **Extract** (status "Extracting <name>...", with the entry count n/N on the progress bar) into
+   `<Shaders>/<install_subdir>` with `strip_components`. Per entry: split on '/'; drop empty and
+   `.` segments, then the first `strip_components` segments; skip if nothing remains, if the entry
+   is a directory, if any segment is `__MACOSX`, or if the file name is `.DS_Store`; reject (abort
+   this pack) if the original name is absolute, contains `\`, or any segment is `..`, or if
+   `Path::Canonicalize(dest + rel)` does not start with `dest`. The entry size comes from the
+   archive, so it is checked against `MAX_ENTRY_SIZE` (64 MB) and a running total against
+   `MAX_TOTAL_SIZE` (1 GB) before anything is allocated for it; over either cap aborts the pack
+   with "Archive entry '<name>' is too large (<n> bytes).". Create parent directories, write with
+   `FileSystem::WriteBinaryFile`, append the path (relative to `dest_dir`; `Install` prefixes
+   `install_subdir` so marker entries are relative to the Shaders folder) to the written list,
+   advance progress.
 6. **Record**: write the marker with `version`, `source_url`, timestamp and the written list.
    On a step-5 abort the marker is still written for the files that landed, so Uninstall or a
-   retry can clean up; the pack is reported as failed.
+   retry can clean up, but `version` is left empty so the partial tree is never mistaken for that
+   version; the UI reports it as incomplete. The pack is reported as failed.
 
 `Uninstall`: read marker, delete listed files, prune empty directories under the install dir,
 delete the marker. `ExpandDependencies` prepends `depends_on` ids that are neither installed nor
@@ -174,16 +189,22 @@ pack and selects it automatically."), `QLabel status`, `QProgressBar progress`, 
 
 Behaviour:
 - On open, a worker resolve pass fills the status column (statuses from section 5); rows in
-  NotInstalled or UpdateAvailable state start checked.
+  NotInstalled or UpdateAvailable state start checked. A marker with an empty version (section 6
+  step 6) shows "Installed (incomplete, reinstall recommended)" and also starts checked.
 - Install: collect checked ids → `ShaderPacks::ExpandDependencies` → show the expanded list in the
   status label → start `ShaderPackWorker : QtAsyncProgressThread` whose `runAsync()` calls
   `ShaderPacks::Install(ids, this)`. While running: Install becomes Cancel (`requestInterruption`
   + join), Close and Uninstall disabled, progress bar bound to `progressUpdated`, label to
   `statusUpdated`.
-- Uninstall: confirmation box listing the checked installed packs, then the worker runs
-  `Uninstall` for each.
+- Uninstall: confirmation box listing the checked installed packs; when the libretro pack is being
+  removed while the installed Retro Crisis pack is not, the box appends "The Retro Crisis presets
+  require the libretro slang shaders and will stop working.". Then the worker runs `Uninstall` for
+  each.
 - On `threadFinished`: re-read markers, refresh statuses, re-enable buttons; the final status text
-  is "Done", "Cancelled", or "Completed with errors: <pack names>".
+  is "Done.", "Uninstalled.", "Cancelled.", or "Completed with errors: <pack names>".
+- Every exit path (`QDialog::done` override, so buttons, Escape and the window close button alike)
+  interrupts and joins the worker before the dialog can be destroyed, then reports "Cancelled.";
+  destroying a running `QThread` is fatal in Qt.
 - The dialog holds a `std::unique_ptr<HTTPDownloader>` only inside the worker; nothing is written
   to the INI.
 
@@ -200,17 +221,25 @@ Behaviour:
 
 ## 9. Testing
 
-Unit tests `tests/ctest/core/shader_packs_tests.cpp` (gtest; zips are created in the test with
-libzip's writer API into a temp directory, no committed binaries, no network):
-- Extraction: strip count honoured; nested directories created; `__MACOSX` and `.DS_Store`
-  skipped; directory entries skipped; written list in order; `../x`, `/abs`, backslash and
-  strip-to-nothing entries rejected with the abort semantics of section 6.
-- Marker: write/read round-trip; missing and malformed files yield nullopt.
+Unit tests `tests/ctest/core/shader_packs_tests.cpp` and `tests/ctest/core/shader_pack_archive_tests.cpp`
+(gtest; zips are created in the test with libzip's writer API into a temp directory, no committed
+binaries, no network):
+- Entry names: strip count honoured; empty and `.` segments dropped (`top/./crt/a.slangp` →
+  `crt/a.slangp`); `__MACOSX` in any segment and `.DS_Store` skipped; directory entries and
+  strip-to-nothing entries skipped; `../x`, `/abs`, backslash and drive-letter entries rejected.
+- Extraction: nested directories created; written list in order; a rejected entry aborts the pack
+  and keeps the files already written (the abort semantics of section 6); the per-entry and running
+  total size caps abort with the files written so far intact (the caps are injectable so the test
+  does not need a huge archive).
+- Marker: write/read round-trip, including an empty version (the incomplete case) and an empty file
+  list; unsafe paths in `files` dropped; missing `version`, missing and malformed files yield
+  nullopt.
 - `ParseReleaseJson`: picks the `.zip` asset, honours `asset_exclude`, errors on no match or
   malformed JSON. `ParseCommitJson`: yields the SHA; errors on malformed input.
-- `ExpandDependencies` with and without an installed dependency marker.
+- `ExpandDependencies` with and without an installed dependency marker, including a marker whose
+  files were deleted by hand (still counts as installed).
 - `Uninstall`: deletes exactly the listed files, prunes empty dirs, keeps unrelated files, removes
-  the marker.
+  the marker, and works for a marker with no files.
 
 Manual (Mac, then Windows over SSH): install all three from a data dir without markers; re-open
 shows Installed; uninstall satpixie removes only its five files; installing RetroCrisis alone
