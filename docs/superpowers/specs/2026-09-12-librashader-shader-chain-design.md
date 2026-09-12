@@ -295,14 +295,20 @@ Manual acceptance matrix (all on Windows x64 and macOS arm64 development machine
 The Windows rows were run on 2026-09-12 on the `pcsx2-win` development machine (Windows 11
 build 26200, Vulkan 1.4.329, D3D12 Agility SDK 619) using *Capcom vs. SNK 2 - Mark of the
 Millennium 2001* (USA, `SLUS-20246`) booted from a save state with the USA BIOS `scph39001.bin`,
-windowed at 2560x1440 with the OSD FPS and speed counters enabled. The macOS rows are still
-pending and follow separately; the BIOS and game image have been copied to the macOS machine.
+windowed at 2560x1440 with the OSD FPS and speed counters enabled.
+
+The macOS rows were run on 2026-09-13 on an Apple Silicon MacBook Pro (macOS 26, Metal on an
+Apple GPU; MoltenVK reporting Vulkan 1.1.334) from the same game image and USA BIOS, in a
+windowed ~1050x700 display with the OSD FPS, VPS, speed, GPU and resolution counters enabled.
+That machine has no formatted PS2 memory card and no way to inject pad input, so instead of a
+save state every macOS cell shows the game's own "no memory card" screen: a game-rendered,
+static 640x448 NTSC frame, identical across cells.
 
 | Backend | 1-pass | LUT preset | Feedback preset (satpixie) | 18-pass RetroCrisis |
 |---|---|---|---|---|
 | Vulkan (Windows) | pass | pass | pass | pass |
-| Vulkan (macOS/MoltenVK) | pending | pending | pending | pending |
-| Metal | pending | pending | pending | pending |
+| Vulkan (macOS/MoltenVK) | pass | pass | pass | pass |
+| Metal | pass | pass | pass | pass |
 | D3D11 | pass | pass | pass | pass |
 | D3D12 | pass | pass | pass | pass |
 
@@ -314,11 +320,32 @@ emitted. A control run per backend with `ShaderChainEnabled = false` rendered no
 `librashader.dll` aside produced exactly one `Shader chain unavailable: ...` warning and a
 normally rendering, unshaded game at full speed.
 
+The eight macOS cells behaved the same way: `librashader loaded from
+.../PCSX2.app/Contents/Frameworks/librashader.dylib (ABI 2, API 5)` followed by
+`ShaderChain(MTL): loaded <preset>` or `ShaderChain(VK): loaded <preset>`, the effect plainly
+visible in every capture (crt-geom's barrel curvature and scanlines, crt-royale's phosphor mask
+and halation, satpixie's scanlines and warm glow, RetroCrisis's NTSC chroma fringing and mask),
+the OSD text crisp and unshaded, and no `preset load failed`, `chain create failed`, `frame
+failed` or `did not render` line in any run. OSD GPU frame time rose from 0.20 ms (Metal control)
+and 0.31 ms (Vulkan control) to 0.63 / 1.11 / 0.70 / 4.08 ms on Metal and 0.65 / 1.14 / 0.75 /
+3.17 ms on Vulkan for crt-geom / crt-royale / satpixie / RetroCrisis. Emulation on that boot
+screen is CPU-bound at 58-64% of full speed on macOS in the controls as well as in every chain
+cell, so these runs show the chain costs no measurable emulation speed but, unlike the Windows
+rows, do not demonstrate a sustained 100% speed. Moving `librashader.dylib` aside produced
+exactly one `Shader chain unavailable: ...` warning naming the paths tried, and a normal unshaded
+game.
+
 Plus, per backend: switch presets while running; toggle off/on; switch renderer with chain
 active; resize window; screenshot is unshaded; OSD is crisp; delete the library and confirm
-normal launch and a disabled UI group. Of these, only the missing-library case has been
-exercised on Windows so far; the runtime switching, resize and F8 checks remain outstanding for
-every backend.
+normal launch and a disabled UI group. Of these, only the missing-library case (D3D12 on Windows,
+Metal on macOS) and OSD crispness have been exercised. Runtime preset switching, toggling the
+chain off and on, switching renderer with the chain active, window resize, the F8 screenshot and
+the disabled UI group remain outstanding on both machines: both harnesses cold-launch PCSX2 with
+a patched INI per cell and neither can drive the settings dialog (on macOS the harness also lacks
+the Accessibility permission required to inject keystrokes, so F8 could not be pressed). Code
+inspection shows F8 screenshots are taken from `GSDevice::GetCurrent()`, the pre-present GS
+frame, while the chain runs later in `GSRenderer::VSync` into a separate target, so screenshots
+are unshaded by construction.
 
 Success criterion: the RetroCrisis 4K preset renders correctly at full speed on all five
 combinations, and PCSX2 launches and plays normally without the library.
