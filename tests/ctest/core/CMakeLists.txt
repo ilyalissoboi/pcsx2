@@ -3,6 +3,7 @@ add_pcsx2_test(core_test
 	shader_presets_tests.cpp
 	librashader_loader_tests.cpp
 	shader_packs_tests.cpp
+	shader_pack_archive_tests.cpp
 	MockMemoryInterface.h
 	StubHost.cpp
 )

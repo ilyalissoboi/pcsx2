@@ -206,6 +206,7 @@
     <ClCompile Include="DEV9\Win32\tap-win32.cpp" />
     <ClCompile Include="GameList.cpp" />
     <ClCompile Include="ShaderPacks.cpp" />
+    <ClCompile Include="ShaderPackArchive.cpp" />
 
     <ClCompile Include="GS\GSDrawingEnvironment.cpp" />
     <ClCompile Include="GS\Renderers\DX11\D3D11ShaderCache.cpp" />
@@ -657,6 +658,7 @@
     <ClInclude Include="DEV9\Win32\tap.h" />
     <ClInclude Include="GameList.h" />
     <ClInclude Include="ShaderPacks.h" />
+    <ClInclude Include="ShaderPackArchive.h" />
 
     <ClInclude Include="GS\GSVector4i_arm64.h" />
     <ClInclude Include="GS\GSVector4_arm64.h" />

@@ -67,6 +67,7 @@ set(pcsx2Sources
 	FPU.cpp
 	GameList.cpp
 	ShaderPacks.cpp
+	ShaderPackArchive.cpp
 
 	Gif.cpp
 	Gif_Logger.cpp
@@ -155,6 +156,7 @@ set(pcsx2Headers
 	FW.h
 	GameList.h
 	ShaderPacks.h
+	ShaderPackArchive.h
 
 	Gif.h
 	Gif_Unit.h

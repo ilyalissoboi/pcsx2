@@ -1343,6 +1343,9 @@
     <ClCompile Include="ShaderPacks.cpp">
       <Filter>Misc</Filter>
     </ClCompile>
+    <ClCompile Include="ShaderPackArchive.cpp">
+      <Filter>Misc</Filter>
+    </ClCompile>
 
     <ClCompile Include="Achievements.cpp">
       <Filter>Tools</Filter>
@@ -2279,6 +2282,9 @@
       <Filter>Misc</Filter>
     </ClInclude>
     <ClInclude Include="ShaderPacks.h">
+      <Filter>Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="ShaderPackArchive.h">
       <Filter>Misc</Filter>
     </ClInclude>
 
