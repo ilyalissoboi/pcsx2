@@ -2263,3 +2263,470 @@ git commit -m "Docs: Record shader pack downloader verification results
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
+
+---
+
+### Task 8: Preset picker dialog and Shader Chain group layout (UAT follow-up)
+
+**Files:**
+- Create: `pcsx2-qt/ShaderPresetPickerDialog.h`, `pcsx2-qt/ShaderPresetPickerDialog.cpp`, `pcsx2-qt/ShaderPresetPickerDialog.ui`
+- Modify: `pcsx2-qt/Settings/GraphicsPostProcessingSettingsTab.ui` (replace the whole `shaderChainGroup` item and its tab stops), `pcsx2-qt/Settings/GraphicsSettingsWidget.h:47-50,63`, `pcsx2-qt/Settings/GraphicsSettingsWidget.cpp` (bindings block ~line 229-241, help text ~750-758, the shader chain functions ~947-1030)
+- Modify: `pcsx2-qt/CMakeLists.txt`, `pcsx2-qt/pcsx2-qt.vcxproj`, `pcsx2-qt/pcsx2-qt.vcxproj.filters` (register the three new files beside `ShaderPackDownloadDialog.*`)
+
+**Interfaces:**
+- Consumes: `ShaderPresets::Enumerate()` (sorted relative paths, '/' separators), `SettingWidgetBinder::BindWidgetToStringSetting` (QComboBox: reads `currentData()`, sets via `findData()`, inserts the per-game item at index 0), `dialog()->getEffectiveStringValue`, `dialog()->isPerGameSettings()`, `ShaderPackDownloadDialog`.
+- Produces: `class ShaderPresetPickerDialog : public QDialog { ShaderPresetPickerDialog(QWidget* parent, const QString& current_preset); QString selectedPreset() const; }`; Post-Processing widgets `shaderChainBrowse` (new), `shaderChainRefresh` removed; `GraphicsSettingsWidget::setShaderChainPresetItems(bool add_global_item, const QString& current)` replaces `populateShaderChainPresets`; slot `onShaderChainBrowseClicked()` replaces `onShaderChainRefreshClicked()`.
+
+No automated UI test; gate is a clean `pcsx2-qt` build on macOS, a Windows `Release Clang|x64` compile, a launch/quit check, then the user's hands-on check.
+
+- [ ] **Step 1: Create the picker `.ui`**
+
+`pcsx2-qt/ShaderPresetPickerDialog.ui`:
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ShaderPresetPickerDialog</class>
+ <widget class="QDialog" name="ShaderPresetPickerDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>640</width>
+    <height>540</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Select Shader Preset</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QLineEdit" name="filter">
+     <property name="placeholderText">
+      <string>Search presets...</string>
+     </property>
+     <property name="clearButtonEnabled">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QTreeView" name="tree">
+     <property name="uniformRowHeights">
+      <bool>true</bool>
+     </property>
+     <property name="headerHidden">
+      <bool>true</bool>
+     </property>
+     <property name="editTriggers">
+      <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="selection">
+     <property name="text">
+      <string>No preset selected.</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QDialogButtonBox" name="buttons">
+     <property name="standardButtons">
+      <set>QDialogButtonBox::StandardButton::Cancel|QDialogButtonBox::StandardButton::Ok</set>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <tabstops>
+  <tabstop>filter</tabstop>
+  <tabstop>tree</tabstop>
+ </tabstops>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>buttons</sender>
+   <signal>accepted()</signal>
+   <receiver>ShaderPresetPickerDialog</receiver>
+   <slot>accept()</slot>
+  </connection>
+  <connection>
+   <sender>buttons</sender>
+   <signal>rejected()</signal>
+   <receiver>ShaderPresetPickerDialog</receiver>
+   <slot>reject()</slot>
+  </connection>
+ </connections>
+</ui>
+```
+
+- [ ] **Step 2: Create the picker header**
+
+`pcsx2-qt/ShaderPresetPickerDialog.h`:
+```cpp
+// SPDX-FileCopyrightText: 2002-2026 PCSX2 Dev Team
+// SPDX-License-Identifier: GPL-3.0+
+
+#pragma once
+
+#include "ui_ShaderPresetPickerDialog.h"
+
+#include <QtWidgets/QDialog>
+
+class QModelIndex;
+class QSortFilterProxyModel;
+class QStandardItem;
+class QStandardItemModel;
+
+/// Tree view over the Shaders folder (packs > folders > presets) with a live search box.
+class ShaderPresetPickerDialog final : public QDialog
+{
+	Q_OBJECT
+
+public:
+	ShaderPresetPickerDialog(QWidget* parent, const QString& current_preset);
+	~ShaderPresetPickerDialog();
+
+	/// Relative preset path ('/' separators) chosen by the user; empty if none.
+	const QString& selectedPreset() const { return m_selected; }
+
+private Q_SLOTS:
+	void onFilterChanged(const QString& text);
+	void onCurrentChanged(const QModelIndex& current);
+	void onActivated(const QModelIndex& index);
+
+private:
+	static constexpr int ROLE_PATH = Qt::UserRole; // relative path for leaves, folder path for folders
+	static constexpr int ROLE_IS_PRESET = Qt::UserRole + 1;
+
+	void buildModel();
+	QStandardItem* findPresetItem(const QString& preset) const;
+	void selectPreset(const QString& preset);
+
+	Ui::ShaderPresetPickerDialog m_ui;
+	QStandardItemModel* m_model = nullptr;
+	QSortFilterProxyModel* m_proxy = nullptr;
+	QString m_selected;
+};
+```
+
+- [ ] **Step 3: Create the picker implementation**
+
+`pcsx2-qt/ShaderPresetPickerDialog.cpp`:
+```cpp
+// SPDX-FileCopyrightText: 2002-2026 PCSX2 Dev Team
+// SPDX-License-Identifier: GPL-3.0+
+
+#include "ShaderPresetPickerDialog.h"
+
+#include "pcsx2/GS/ShaderChain/ShaderPresets.h"
+
+#include <QtCore/QSortFilterProxyModel>
+#include <QtGui/QStandardItemModel>
+#include <QtWidgets/QPushButton>
+
+#include <map>
+
+ShaderPresetPickerDialog::ShaderPresetPickerDialog(QWidget* parent, const QString& current_preset)
+	: QDialog(parent)
+{
+	m_ui.setupUi(this);
+
+	m_model = new QStandardItemModel(this);
+	buildModel();
+
+	m_proxy = new QSortFilterProxyModel(this);
+	m_proxy->setSourceModel(m_model);
+	m_proxy->setRecursiveFilteringEnabled(true);
+	m_proxy->setFilterCaseSensitivity(Qt::CaseInsensitive);
+	m_proxy->setFilterRole(ROLE_PATH);
+	m_ui.tree->setModel(m_proxy);
+
+	connect(m_ui.filter, &QLineEdit::textChanged, this, &ShaderPresetPickerDialog::onFilterChanged);
+	connect(m_ui.tree->selectionModel(), &QItemSelectionModel::currentChanged, this,
+		[this](const QModelIndex& current, const QModelIndex&) { onCurrentChanged(current); });
+	connect(m_ui.tree, &QTreeView::activated, this, &ShaderPresetPickerDialog::onActivated);
+
+	m_ui.buttons->button(QDialogButtonBox::Ok)->setEnabled(false);
+	selectPreset(current_preset);
+	m_ui.filter->setFocus();
+}
+
+ShaderPresetPickerDialog::~ShaderPresetPickerDialog() = default;
+
+void ShaderPresetPickerDialog::buildModel()
+{
+	std::map<QString, QStandardItem*> folders; // folder path -> item
+	QStandardItem* const root = m_model->invisibleRootItem();
+
+	for (const std::string& preset : ShaderPresets::Enumerate())
+	{
+		const QString path = QString::fromStdString(preset);
+		const QStringList parts = path.split(QChar('/'), Qt::SkipEmptyParts);
+		if (parts.isEmpty())
+			continue;
+
+		QStandardItem* parent = root;
+		QString folder_path;
+		for (qsizetype i = 0; i + 1 < parts.size(); i++)
+		{
+			folder_path = folder_path.isEmpty() ? parts[i] : (folder_path + QChar('/') + parts[i]);
+			auto it = folders.find(folder_path);
+			if (it == folders.end())
+			{
+				QStandardItem* folder = new QStandardItem(parts[i]);
+				folder->setEditable(false);
+				folder->setSelectable(false);
+				folder->setData(folder_path, ROLE_PATH);
+				folder->setData(false, ROLE_IS_PRESET);
+				parent->appendRow(folder);
+				it = folders.emplace(folder_path, folder).first;
+			}
+			parent = it->second;
+		}
+
+		QStandardItem* leaf = new QStandardItem(parts.last());
+		leaf->setEditable(false);
+		leaf->setData(path, ROLE_PATH);
+		leaf->setData(true, ROLE_IS_PRESET);
+		leaf->setToolTip(path);
+		parent->appendRow(leaf);
+	}
+}
+
+QStandardItem* ShaderPresetPickerDialog::findPresetItem(const QString& preset) const
+{
+	if (preset.isEmpty())
+		return nullptr;
+	const QModelIndexList matches = m_model->match(m_model->index(0, 0), ROLE_PATH, preset, 1, Qt::MatchExactly | Qt::MatchRecursive);
+	return matches.isEmpty() ? nullptr : m_model->itemFromIndex(matches.first());
+}
+
+void ShaderPresetPickerDialog::selectPreset(const QString& preset)
+{
+	QStandardItem* item = findPresetItem(preset);
+	if (!item)
+	{
+		m_ui.tree->collapseAll();
+		return;
+	}
+
+	const QModelIndex proxy_index = m_proxy->mapFromSource(item->index());
+	for (QModelIndex parent = proxy_index.parent(); parent.isValid(); parent = parent.parent())
+		m_ui.tree->expand(parent);
+	m_ui.tree->setCurrentIndex(proxy_index);
+	m_ui.tree->scrollTo(proxy_index, QAbstractItemView::PositionAtCenter);
+}
+
+void ShaderPresetPickerDialog::onFilterChanged(const QString& text)
+{
+	m_proxy->setFilterFixedString(text);
+	if (!text.isEmpty())
+	{
+		m_ui.tree->expandAll();
+		return;
+	}
+	m_ui.tree->collapseAll();
+	selectPreset(m_selected);
+}
+
+void ShaderPresetPickerDialog::onCurrentChanged(const QModelIndex& current)
+{
+	const bool is_preset = current.isValid() && current.data(ROLE_IS_PRESET).toBool();
+	m_selected = is_preset ? current.data(ROLE_PATH).toString() : QString();
+	m_ui.selection->setText(is_preset ? m_selected : tr("No preset selected."));
+	m_ui.buttons->button(QDialogButtonBox::Ok)->setEnabled(is_preset);
+}
+
+void ShaderPresetPickerDialog::onActivated(const QModelIndex& index)
+{
+	if (index.isValid() && index.data(ROLE_IS_PRESET).toBool())
+	{
+		m_selected = index.data(ROLE_PATH).toString();
+		accept();
+	}
+}
+
+#include "moc_ShaderPresetPickerDialog.cpp"
+```
+`QItemSelectionModel` needs `#include <QtCore/QItemSelectionModel>`; add it.
+
+- [ ] **Step 4: Rework the Shader Chain group in `GraphicsPostProcessingSettingsTab.ui`**
+
+Replace the whole `<item>` containing `shaderChainGroup` with:
+```xml
+   <item>
+    <widget class="QGroupBox" name="shaderChainGroup">
+     <property name="title">
+      <string>Shader Chain (librashader)</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_shaderChain">
+      <item row="0" column="0" colspan="3">
+       <widget class="QCheckBox" name="shaderChainEnabled">
+        <property name="text">
+         <string>Enable Shader Chain</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="shaderChainPresetLabel">
+        <property name="text">
+         <string>Preset:</string>
+        </property>
+        <property name="buddy">
+         <cstring>shaderChainPreset</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QComboBox" name="shaderChainPreset">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+          <horstretch>1</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="2">
+       <widget class="QPushButton" name="shaderChainBrowse">
+        <property name="text">
+         <string>Browse...</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1" colspan="2">
+       <layout class="QHBoxLayout" name="shaderChainActionsLayout">
+        <item>
+         <widget class="QPushButton" name="shaderChainOpenFolder">
+          <property name="text">
+           <string>Open Folder...</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="shaderChainDownload">
+          <property name="text">
+           <string>Download Shader Packs...</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="shaderChainActionsSpacer">
+          <property name="orientation">
+           <enum>Qt::Orientation::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>0</width>
+            <height>0</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+      <item row="3" column="0" colspan="3">
+       <widget class="QLabel" name="shaderChainStatus">
+        <property name="text">
+         <string/>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+```
+Tab stops: replace `<tabstop>shaderChainRefresh</tabstop>` with `<tabstop>shaderChainBrowse</tabstop>` (order: enabled, preset, browse, openFolder, download).
+
+- [ ] **Step 5: Rework `GraphicsSettingsWidget`**
+
+Header: replace `void onShaderChainRefreshClicked();` with `void onShaderChainBrowseClicked();`; replace `void populateShaderChainPresets(bool add_global_item);` with `void setShaderChainPresetItems(bool add_global_item, const QString& current);`.
+
+Source, includes: add `#include "ShaderPresetPickerDialog.h"`; remove `#include "pcsx2/GS/ShaderChain/ShaderPresets.h"` if nothing else in the file uses it (grep first).
+
+Bindings block: replace from the two-line comment down to the `shaderChainDownload` connect with:
+```cpp
+	// Shader chain (librashader). The combobox is the bound widget (per-game "Use Global Setting" relies on the
+	// QComboBox binder, which reads currentData() and selects via findData()), but it only ever lists the current
+	// preset; browsing happens in ShaderPresetPickerDialog.
+	setShaderChainPresetItems(false, QString::fromStdString(dialog()->getEffectiveStringValue("EmuCore/GS", "ShaderChainPreset", "")));
+	SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_post.shaderChainEnabled, "EmuCore/GS", "ShaderChainEnabled", false);
+	SettingWidgetBinder::BindWidgetToStringSetting(sif, m_post.shaderChainPreset, "EmuCore/GS", "ShaderChainPreset", "");
+	connect(m_post.shaderChainEnabled, &QCheckBox::checkStateChanged, this, &GraphicsSettingsWidget::onShaderChainEnabledChanged);
+	connect(m_post.shaderChainBrowse, &QPushButton::clicked, this, &GraphicsSettingsWidget::onShaderChainBrowseClicked);
+	connect(m_post.shaderChainOpenFolder, &QPushButton::clicked, this, &GraphicsSettingsWidget::onShaderChainOpenFolderClicked);
+	connect(m_post.shaderChainDownload, &QPushButton::clicked, this, &GraphicsSettingsWidget::onShaderChainDownloadClicked);
+```
+Help text: change the preset entry's text to `tr("Preset file to apply, relative to the Shaders folder. Use Browse... to pick one from the installed shader packs. Presets that reference other shaders (for example the libretro shaders_slang pack) must be installed with their directory structure intact.")` and add
+```cpp
+		dialog()->registerWidgetHelp(m_post.shaderChainBrowse, tr("Browse"), tr("N/A"),
+			tr("Opens a searchable tree of the presets found in the Shaders folder."));
+```
+Functions: replace `populateShaderChainPresets`, `onShaderChainEnabledChanged`, `onShaderChainRefreshClicked` and `onShaderChainDownloadClicked` with:
+```cpp
+void GraphicsSettingsWidget::setShaderChainPresetItems(bool add_global_item, const QString& current)
+{
+	// Items: [Use Global Setting (per-game only)], (None), <current preset>. Ends on (None) so that a
+	// subsequent setCurrentIndex() to the preset item always emits currentIndexChanged for the binder.
+	QSignalBlocker blocker(m_post.shaderChainPreset);
+	m_post.shaderChainPreset->clear();
+	if (add_global_item)
+	{
+		const std::string global_value = Host::GetBaseStringSettingValue("EmuCore/GS", "ShaderChainPreset", "");
+		m_post.shaderChainPreset->addItem(tr("Use Global Setting [%1]").arg(global_value.empty() ? tr("(None)") : QString::fromStdString(global_value)));
+	}
+	m_post.shaderChainPreset->addItem(tr("(None)"), QString());
+	if (!current.isEmpty())
+		m_post.shaderChainPreset->addItem(current, current);
+	m_post.shaderChainPreset->setCurrentIndex(add_global_item ? 1 : 0);
+}
+
+void GraphicsSettingsWidget::onShaderChainEnabledChanged()
+{
+	const bool enabled = dialog()->getEffectiveBoolValue("EmuCore/GS", "ShaderChainEnabled", false);
+	m_post.shaderChainPreset->setEnabled(enabled);
+	m_post.shaderChainBrowse->setEnabled(enabled);
+}
+
+void GraphicsSettingsWidget::onShaderChainBrowseClicked()
+{
+	ShaderPresetPickerDialog dlg(this, m_post.shaderChainPreset->currentData().toString());
+	if (dlg.exec() != QDialog::Accepted || dlg.selectedPreset().isEmpty())
+		return;
+
+	const QString preset = dlg.selectedPreset();
+	setShaderChainPresetItems(dialog()->isPerGameSettings(), preset); // leaves the combobox on (None)
+	m_post.shaderChainPreset->setCurrentIndex(m_post.shaderChainPreset->findData(preset)); // fires the binder
+}
+
+void GraphicsSettingsWidget::onShaderChainDownloadClicked()
+{
+	ShaderPackDownloadDialog dlg(this);
+	dlg.exec();
+}
+```
+Keep `updateShaderChainAvailability()` and `onShaderChainOpenFolderClicked()` unchanged. The binder call runs after `setShaderChainPresetItems(false, current)`, so on a per-game dialog it inserts the "Use Global Setting" item itself and selects it when the per-game key is absent, exactly as before.
+
+- [ ] **Step 6: Register the new files**
+
+`pcsx2-qt/CMakeLists.txt`: add `ShaderPresetPickerDialog.cpp`, `.h`, `.ui` in alphabetical position (after the `ShaderPackDownloadDialog.*` entries). `pcsx2-qt/pcsx2-qt.vcxproj`: `<ClCompile Include="ShaderPresetPickerDialog.cpp" />`, `<QtMoc Include="ShaderPresetPickerDialog.h" />`, `<QtUi Include="ShaderPresetPickerDialog.ui" />` beside the ShaderPackDownloadDialog entries; same three in `.filters`.
+
+- [ ] **Step 7: Build, launch, Windows compile**
+
+macOS: `cmake --build build-sc --target pcsx2-qt 2>&1 | grep -E " error|warning: " | grep -i "ShaderPreset\|GraphicsSettings"; cmake --build build-sc --target pcsx2-qt 2>&1 | tail -1`; then `open build-sc/pcsx2-qt/PCSX2.app`, wait 10 s, `osascript -e 'quit app "PCSX2"'`, no new PCSX2 crash report. Windows: bundle transfer + `schtasks /Run /TN pcsx2-build` + poll `E:\work\pcsx2-build.log` for `EXIT_CODE=0` (procedure in the phase 1 plan's "Windows Remote Workflow").
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add pcsx2-qt/ShaderPresetPickerDialog.h pcsx2-qt/ShaderPresetPickerDialog.cpp pcsx2-qt/ShaderPresetPickerDialog.ui pcsx2-qt/Settings/GraphicsPostProcessingSettingsTab.ui pcsx2-qt/Settings/GraphicsSettingsWidget.h pcsx2-qt/Settings/GraphicsSettingsWidget.cpp pcsx2-qt/CMakeLists.txt pcsx2-qt/pcsx2-qt.vcxproj pcsx2-qt/pcsx2-qt.vcxproj.filters
+git commit -m "Qt: Add a searchable tree picker for shader presets and tidy the Shader Chain group
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```

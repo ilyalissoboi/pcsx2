@@ -208,6 +208,26 @@ Behaviour:
 - The dialog holds a `std::unique_ptr<HTTPDownloader>` only inside the worker; nothing is written
   to the INI.
 
+### 7.1 Preset picker (added after UAT on 2026-09-13)
+
+The flat preset combobox became unusable once the packs were installed (2,987 presets in 190 folders on
+the development Mac). Chosen design: a **tree picker dialog with search**.
+
+- `pcsx2-qt/ShaderPresetPickerDialog.{h,cpp,ui}`: a `QTreeView` over a `QStandardItemModel` built from
+  `ShaderPresets::Enumerate()` — one folder node per path component, one leaf per `.slangp` whose display
+  text is the file name and whose `Qt::UserRole` data is the relative path (folders carry their folder
+  path in `Qt::UserRole` and `false` in `Qt::UserRole + 1`; leaves carry `true`). A
+  `QSortFilterProxyModel` with recursive filtering on `Qt::UserRole` drives a search box: typing `crt`
+  shows every preset whose relative path contains `crt`, expanded. OK is enabled only for a leaf;
+  double-click or Enter on a leaf accepts. The dialog opens with the current preset selected and its
+  folders expanded.
+- The Shader Chain group keeps the bound `QComboBox` (per-game "Use Global Setting" relies on the
+  combobox binder) but it now lists only the per-game item, "(None)" and the current preset; a
+  **Browse...** button opens the picker and, on accept, replaces the preset item and selects it so the
+  binder saves the value. The Refresh button is removed (the picker enumerates on open). Layout: row 0
+  enable checkbox; row 1 Preset label, combobox, Browse...; row 2 Open Folder..., Download Shader
+  Packs...; row 3 status.
+
 ## 8. Error handling summary
 
 | Condition | Behaviour |
@@ -246,6 +266,15 @@ shows Installed; uninstall satpixie removes only its five files; installing Retr
 after removing both auto-adds the libretro pack; cancel mid-download leaves no partial files;
 offline shows "could not check" and Install reports the error; on Windows a downloaded
 RetroCrisis preset loads on D3D12.
+
+Results (2026-09-13, user acceptance on the Mac build `build-sc/pcsx2-qt/PCSX2.app` and the Windows
+`Release Clang|x64` build, both at commit a6ab992af):
+- Items 1-7 of the click-through (fresh install of all three packs, statuses on re-open, satpixie
+  uninstall, Retro Crisis auto-selecting the libretro pack, Escape while checking, cancel mid-extraction
+  showing "incomplete", offline behaviour): **all passed**.
+- Two UI change requests, addressed by plan Task 8: move "Download Shader Packs..." to its own row; replace
+  the flat preset combobox with a structured picker (section 7.1).
+- Windows D3D12 load of a downloaded Retro Crisis preset (item 8): not run yet.
 
 Success criterion: a fresh PCSX2 data directory reaches a working RetroCrisis preset on both
 machines using only the dialog, and the unit tests pass on both.
