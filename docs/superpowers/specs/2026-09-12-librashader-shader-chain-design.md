@@ -109,7 +109,7 @@ namespace ShaderChain {
 - Library path: Windows `Path::Combine(EmuFolders::AppRoot, "librashader.dll")`; macOS
   `<bundle>/Contents/Frameworks/librashader.dylib` obtained via `CocoaTools` (fallback to AppRoot
   for non-bundled dev builds).
-- Resolve `libra_abi_version` and `libra_api_version` first. Refuse unless ABI == `LIBRASHADER_CURRENT_ABI` (2).
+- Resolve `libra_instance_abi_version` and `libra_instance_api_version` first. Refuse unless ABI == `LIBRASHADER_CURRENT_ABI` (2).
 - Function tables: `preset_*` and `error_*` common; `vk_*` always; `d3d11_*`, `d3d12_*` on
   Windows; `mtl_*` on Apple. Any missing symbol marks the library unavailable with the symbol name.
 - One log line on failure. No OSD from the loader itself.
@@ -262,6 +262,8 @@ The Software renderer presents through a hardware device, so the chain works the
 - `QPushButton shaderChainRefresh` re-enumerates; `QPushButton shaderChainOpenFolder` opens `EmuFolders::Shaders`.
 - `QLabel shaderChainStatus` shows `GetAvailability().reason` when unavailable, otherwise the
   last preset error if any (polled when the tab is shown).
+  In phase 1 the label only reports availability (library missing, or renderer unsupported); surfacing
+  the last preset error, which is only known on the GS thread, is deferred to the UX sub-project.
 - When unavailable, the group is disabled with the reason as tooltip.
 
 `GraphicsSettingsWidget.cpp`: bindings above, `populateShaderChainPresets()`, help text via `registerWidgetHelp`.
@@ -289,6 +291,9 @@ Automated (`tests/ctest/core`, gtest):
 - Loader: absent library yields `available == false` with a non-empty reason.
 
 Manual acceptance matrix (all on Windows x64 and macOS arm64 development machines):
+
+Not yet run: no PS2 BIOS or game image was available on either development machine when phase 1 was
+implemented; all rows are pending.
 
 | Backend | 1-pass | LUT preset | Feedback preset (satpixie) | 18-pass RetroCrisis |
 |---|---|---|---|---|
