@@ -652,6 +652,9 @@ if(USE_VULKAN)
 	target_include_directories(PCSX2_FLAGS INTERFACE ${SHADERC_INCLUDE_DIR})
 endif()
 
+# librashader C header (library is loaded at runtime, see GS/ShaderChain/LibrashaderLoader.cpp)
+target_include_directories(PCSX2_FLAGS INTERFACE ${CMAKE_SOURCE_DIR}/3rdparty/librashader/include)
+
 set(pcsx2GSMetalShaders
 	GS/Renderers/Metal/cas.metal
 	GS/Renderers/Metal/convert.metal
