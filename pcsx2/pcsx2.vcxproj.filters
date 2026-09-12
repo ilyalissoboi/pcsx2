@@ -1340,6 +1340,10 @@
     <ClCompile Include="GameList.cpp">
       <Filter>Misc</Filter>
     </ClCompile>
+    <ClCompile Include="ShaderPacks.cpp">
+      <Filter>Misc</Filter>
+    </ClCompile>
+
     <ClCompile Include="Achievements.cpp">
       <Filter>Tools</Filter>
     </ClCompile>
@@ -2274,6 +2278,10 @@
     <ClInclude Include="GameList.h">
       <Filter>Misc</Filter>
     </ClInclude>
+    <ClInclude Include="ShaderPacks.h">
+      <Filter>Misc</Filter>
+    </ClInclude>
+
     <ClInclude Include="INISettingsInterface.h">
       <Filter>Misc</Filter>
     </ClInclude>

@@ -66,6 +66,8 @@ set(pcsx2Sources
 	FiFo.cpp
 	FPU.cpp
 	GameList.cpp
+	ShaderPacks.cpp
+
 	Gif.cpp
 	Gif_Logger.cpp
 	Gif_Unit.cpp
@@ -152,6 +154,8 @@ set(pcsx2Headers
 	Elfheader.h
 	FW.h
 	GameList.h
+	ShaderPacks.h
+
 	Gif.h
 	Gif_Unit.h
 	GS.h
@@ -1152,6 +1156,8 @@ target_link_libraries(PCSX2_FLAGS INTERFACE
 	fmt::fmt
 	libchdr
 	libzip::zip
+	rapidjson
+
 	cpuinfo
 	cubeb
 	rcheevos
