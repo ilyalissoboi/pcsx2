@@ -150,3 +150,5 @@ void ShaderFavoritesDialog::updateButtons()
 	m_ui.moveUp->setEnabled(row > 0);
 	m_ui.moveDown->setEnabled(row >= 0 && row + 1 < count);
 }
+
+#include "moc_ShaderFavoritesDialog.cpp"

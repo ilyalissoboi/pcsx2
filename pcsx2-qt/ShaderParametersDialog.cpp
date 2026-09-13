@@ -321,3 +321,5 @@ void ShaderParametersDialog::onResetAllClicked()
 	pushToStore();
 	scheduleWrite();
 }
+
+#include "moc_ShaderParametersDialog.cpp"
