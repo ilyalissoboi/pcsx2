@@ -176,6 +176,7 @@
     <ClCompile Include="CoverDownloadDialog.cpp" />
     <ClCompile Include="ShaderPackDownloadDialog.cpp" />
     <ClCompile Include="ShaderPresetPickerDialog.cpp" />
+    <ClCompile Include="ShaderParametersDialog.cpp" />
     <ClCompile Include="DisplayWidget.cpp" />
     <ClCompile Include="ShortcutCreationDialog.cpp" />
     <ClCompile Include="QtHost.cpp" />
@@ -280,6 +281,7 @@
     <QtMoc Include="CoverDownloadDialog.h" />
     <QtMoc Include="ShaderPackDownloadDialog.h" />
     <QtMoc Include="ShaderPresetPickerDialog.h" />
+    <QtMoc Include="ShaderParametersDialog.h" />
     <QtMoc Include="ShortcutCreationDialog.h" />
     <QtMoc Include="MainWindow.h" />
     <QtMoc Include="DisplayWidget.h" />
@@ -300,6 +302,7 @@
     <QtUi Include="CoverDownloadDialog.ui" />
     <QtUi Include="ShaderPackDownloadDialog.ui" />
     <QtUi Include="ShaderPresetPickerDialog.ui" />
+    <QtUi Include="ShaderParametersDialog.ui" />
     <QtUi Include="ShortcutCreationDialog.ui" />
     <QtUi Include="Debugger\AnalysisOptionsDialog.ui" />
     <QtUi Include="Debugger\Breakpoints\BreakpointDialog.ui" />
