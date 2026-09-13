@@ -191,3 +191,10 @@ Manual acceptance on both machines (Metal and Vulkan on macOS; D3D12 and one of 
 4. Favourites: add current, add via picker, reorder, remove; entries survive a restart.
 5. Hotkeys: bind Toggle, Next and Previous; each shows an OSD message; Next with the chain disabled enables it; a favourite pointing at a deleted file is skipped.
 6. Overlay: with `OsdShowSettings` on, `SC=<stem>` appears while the chain is enabled and disappears when toggled off.
+
+## 9. Results
+
+| Check | macOS arm64 | Windows x64 |
+|---|---|---|
+| Build | pass | pass |
+| core_test (incl. EnumerateParameters with library) | 123 pass | 167 pass |
