@@ -116,18 +116,22 @@ void ShaderParametersDialog::buildRows()
 		label->setToolTip(QString::fromStdString(info.name));
 		grid->addWidget(label, grid_row, 0);
 
-		const bool degenerate = (info.step <= 0.0f || info.maximum <= info.minimum);
+		// A slider needs at least one whole step: has_range rules out a non-positive step and an
+		// inverted range, whole_steps rules out a range narrower than a single step (those have no
+		// usable positions, so they get the spin box alone).
+		const bool has_range = (info.step > 0.0f && info.maximum > info.minimum);
+		const double whole_steps = has_range ? std::round((info.maximum - info.minimum) / info.step) : 0.0;
+		const bool degenerate = (whole_steps < 1.0);
 		if (!degenerate)
 		{
 			// One position per whole step, so a position is exactly minimum + p * step. Ranges with
 			// more steps than the slider can carry are capped, which stretches the increment.
-			const double whole_steps = std::round((info.maximum - info.minimum) / info.step);
 			const int steps = static_cast<int>(std::min<double>(whole_steps, static_cast<double>(MAX_SLIDER_STEPS)));
 			row.slider_increment = (whole_steps <= static_cast<double>(MAX_SLIDER_STEPS)) ?
 									   info.step :
 									   (info.maximum - info.minimum) / static_cast<float>(MAX_SLIDER_STEPS);
 			row.slider = new QSlider(Qt::Horizontal, m_ui.scrollContents);
-			row.slider->setRange(0, std::max(steps, 1));
+			row.slider->setRange(0, steps);
 			row.slider->setMinimumWidth(180);
 			row.slider->setFocusPolicy(Qt::StrongFocus);
 			row.slider->installEventFilter(this);
@@ -136,9 +140,13 @@ void ShaderParametersDialog::buildRows()
 				Row& r = m_rows[i];
 				// The last position is the maximum exactly, even when the range is not a whole
 				// number of steps.
-				const float v = (pos >= r.slider->maximum()) ?
-									r.info.maximum :
-									r.info.minimum + static_cast<float>(pos) * r.slider_increment;
+				float v = (pos >= r.slider->maximum()) ?
+							  r.info.maximum :
+							  r.info.minimum + static_cast<float>(pos) * r.slider_increment;
+				// The position nearest the default *is* the default: minimum + p * step accumulates
+				// float noise on wide ranges, which would leave Reset enabled and persist that noise.
+				if (std::abs(v - r.info.initial) < r.slider_increment * 0.5f)
+					v = r.info.initial;
 				onValueEdited(r, v);
 			});
 		}
@@ -146,15 +154,16 @@ void ShaderParametersDialog::buildRows()
 		row.spin = new QDoubleSpinBox(m_ui.scrollContents);
 		// Decimals first: QDoubleSpinBox rounds the range and the step to the current precision.
 		row.spin->setDecimals(ShaderChainParams::DecimalsForStep(info.step));
-		if (degenerate)
+		if (has_range)
 		{
-			row.spin->setRange(-1.0e9, 1.0e9);
-			row.spin->setSingleStep(info.step > 0.0f ? info.step : 1.0);
+			// Includes the sub-step ranges that lost their slider: the preset range still applies.
+			row.spin->setRange(info.minimum, info.maximum);
+			row.spin->setSingleStep(info.step);
 		}
 		else
 		{
-			row.spin->setRange(info.minimum, info.maximum);
-			row.spin->setSingleStep(info.step);
+			row.spin->setRange(-1.0e9, 1.0e9);
+			row.spin->setSingleStep(info.step > 0.0f ? info.step : 1.0);
 		}
 		row.spin->setMinimumWidth(90);
 		row.spin->setKeyboardTracking(false);

@@ -285,7 +285,9 @@ namespace ShaderChainParams
 	const char* SettingsSection();
 
 	/// Reads the layered override list for the preset and pushes it into ShaderPresets::Params().
-	/// A missing list pushes an empty ParamList, which resets the chain to its defaults.
+	/// Backends only set the parameters in the list; a freshly built chain starts from the preset
+	/// defaults, so this is complete after a preset change. The editor dialog pushes every
+	/// parameter explicitly so that resetting one takes effect on a live chain.
 	void ApplyOverridesToStore(std::string_view preset_relative_path);
 
 	/// Next (forward) or previous entry of `favorites` relative to `current`, wrapping around and
