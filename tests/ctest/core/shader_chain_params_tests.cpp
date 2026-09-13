@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0+
 
 #include "GS/ShaderChain/ShaderChainParams.h"
+#include "GS/ShaderChain/LibrashaderLoader.h"
+#include "common/Error.h"
 #include "common/FileSystem.h"
 #include "common/Path.h"
 #include <gtest/gtest.h>
@@ -140,4 +142,80 @@ TEST(ShaderChainParams, NextFavoriteEmptyOrAllMissingReturnsEmpty)
 	EXPECT_TRUE(ShaderChainParams::NextFavoriteIn(t.root(), {}, "a.slangp", true).empty());
 	EXPECT_TRUE(ShaderChainParams::NextFavoriteIn(t.root(), {"x.slangp", "y.slangp"}, "", true).empty());
 	EXPECT_TRUE(ShaderChainParams::NextFavoriteIn(t.root(), {"../escape.slangp"}, "", true).empty());
+}
+
+namespace
+{
+	// Minimal preset + shader pair. Enumeration only preprocesses the shader (no compilation), but
+	// keep the GLSL valid so the fixture also loads in a real chain.
+	constexpr const char* FIXTURE_SLANGP = "shaders = 1\nshader0 = params.slang\n";
+	constexpr const char* FIXTURE_SLANG =
+		"#version 450\n"
+		"#pragma parameter TEST_GAIN \"Test gain\" 1.0 0.0 2.0 0.1\n"
+		"#pragma parameter TEST_FLAG \"Test flag\" 0.0 0.0 1.0 1.0\n"
+		"layout(push_constant) uniform Push { float TEST_GAIN; float TEST_FLAG; } params;\n"
+		"layout(std140, set = 0, binding = 0) uniform UBO { mat4 MVP; } global;\n"
+		"#pragma stage vertex\n"
+		"layout(location = 0) in vec4 Position;\n"
+		"layout(location = 1) in vec2 TexCoord;\n"
+		"layout(location = 0) out vec2 vTexCoord;\n"
+		"void main() { gl_Position = global.MVP * Position; vTexCoord = TexCoord; }\n"
+		"#pragma stage fragment\n"
+		"layout(location = 0) in vec2 vTexCoord;\n"
+		"layout(location = 0) out vec4 FragColor;\n"
+		"layout(set = 0, binding = 2) uniform sampler2D Source;\n"
+		"void main() { FragColor = texture(Source, vTexCoord) * params.TEST_GAIN; }\n";
+} // namespace
+
+TEST(ShaderChainParams, EnumerateParametersReadsPragmaParameters)
+{
+	if (!ShaderChain::GetAvailability().available)
+		GTEST_SKIP() << "librashader not loadable: " << ShaderChain::GetAvailability().reason
+					 << " (set PCSX2_LIBRASHADER_PATH to run this test)";
+
+	TempTree t;
+	ASSERT_FALSE(t.root().empty());
+	t.file("fixture.slangp", FIXTURE_SLANGP);
+	t.file("params.slang", FIXTURE_SLANG);
+
+	std::vector<ShaderChainParams::ParameterInfo> params;
+	Error error;
+	ASSERT_TRUE(ShaderChainParams::EnumerateParameters(Path::Combine(t.root(), "fixture.slangp"), &params, &error))
+		<< error.GetDescription();
+	ASSERT_EQ(params.size(), 2u);
+	EXPECT_EQ(params[0].name, "TEST_GAIN");
+	EXPECT_EQ(params[0].description, "Test gain");
+	EXPECT_FLOAT_EQ(params[0].initial, 1.0f);
+	EXPECT_FLOAT_EQ(params[0].minimum, 0.0f);
+	EXPECT_FLOAT_EQ(params[0].maximum, 2.0f);
+	EXPECT_FLOAT_EQ(params[0].step, 0.1f);
+	EXPECT_EQ(params[1].name, "TEST_FLAG");
+	EXPECT_FLOAT_EQ(params[1].step, 1.0f);
+}
+
+TEST(ShaderChainParams, EnumerateParametersFailsForMissingShader)
+{
+	if (!ShaderChain::GetAvailability().available)
+		GTEST_SKIP() << "librashader not loadable";
+
+	TempTree t;
+	ASSERT_FALSE(t.root().empty());
+	t.file("broken.slangp", "shaders = 1\nshader0 = does_not_exist.slang\n");
+
+	std::vector<ShaderChainParams::ParameterInfo> params;
+	Error error;
+	EXPECT_FALSE(ShaderChainParams::EnumerateParameters(Path::Combine(t.root(), "broken.slangp"), &params, &error));
+	EXPECT_FALSE(error.GetDescription().empty());
+	EXPECT_TRUE(params.empty());
+}
+
+TEST(ShaderChainParams, EnumerateParametersFailsForMissingPreset)
+{
+	if (!ShaderChain::GetAvailability().available)
+		GTEST_SKIP() << "librashader not loadable";
+
+	std::vector<ShaderChainParams::ParameterInfo> params;
+	Error error;
+	EXPECT_FALSE(ShaderChainParams::EnumerateParameters("/definitely/not/here.slangp", &params, &error));
+	EXPECT_FALSE(error.GetDescription().empty());
 }

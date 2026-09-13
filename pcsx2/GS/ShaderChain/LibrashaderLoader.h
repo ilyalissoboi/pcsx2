@@ -48,6 +48,7 @@ namespace ShaderChain
 	std::string DescribeAndFreeError(libra_error_t error);
 
 	/// Platform default location: next to the executable (Windows) or Contents/Frameworks (macOS bundle).
+	/// The PCSX2_LIBRASHADER_PATH environment variable overrides both.
 	std::string GetDefaultLibraryPath();
 
 	/// Attempts to load from an explicit path without affecting global state. Used by tests.

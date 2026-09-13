@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0+
 
 #include "GS/ShaderChain/LibrashaderLoader.h"
+#include <cstdlib>
 #include "common/Path.h"
 #include <gtest/gtest.h>
 
@@ -43,4 +44,32 @@ TEST(LibrashaderLoader, DefaultPathHasPlatformFileName)
 TEST(LibrashaderLoader, DescribeNullErrorDoesNotCrash)
 {
 	EXPECT_EQ(ShaderChain::DescribeAndFreeError(nullptr), "unknown librashader error");
+}
+
+namespace
+{
+	void SetEnvVar(const char* name, const char* value)
+	{
+#ifdef _WIN32
+		_putenv_s(name, value);
+#else
+		if (value[0] == '\0')
+			unsetenv(name);
+		else
+			setenv(name, value, 1);
+#endif
+	}
+} // namespace
+
+TEST(LibrashaderLoader, EnvironmentOverrideWinsOverDefaultPath)
+{
+	const char* previous = std::getenv("PCSX2_LIBRASHADER_PATH");
+	const std::string saved = previous ? previous : "";
+
+	SetEnvVar("PCSX2_LIBRASHADER_PATH", "/tmp/override/librashader-test.dylib");
+	EXPECT_EQ(ShaderChain::GetDefaultLibraryPath(), "/tmp/override/librashader-test.dylib");
+
+	SetEnvVar("PCSX2_LIBRASHADER_PATH", saved.c_str());
+	if (saved.empty())
+		EXPECT_NE(ShaderChain::GetDefaultLibraryPath(), "/tmp/override/librashader-test.dylib");
 }

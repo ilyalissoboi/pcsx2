@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0+
 
 #include "GS/ShaderChain/ShaderChainParams.h"
+#include "GS/ShaderChain/LibrashaderLoader.h"
+#include "common/Error.h"
 #include "Config.h"
 #include "Host.h"
 
@@ -118,4 +120,63 @@ std::string ShaderChainParams::NextFavoriteIn(const std::string& shaders_root, c
 std::string ShaderChainParams::NextFavorite(const std::vector<std::string>& favorites, std::string_view current, bool forward)
 {
 	return NextFavoriteIn(EmuFolders::Shaders, favorites, current, forward);
+}
+
+bool ShaderChainParams::EnumerateParameters(const std::string& absolute_preset_path, std::vector<ParameterInfo>* out, Error* error)
+{
+	out->clear();
+
+	const ShaderChain::Availability& avail = ShaderChain::GetAvailability();
+	if (!avail.available)
+	{
+		Error::SetStringView(error, avail.reason);
+		return false;
+	}
+
+	const ShaderChain::CommonFunctions& c = ShaderChain::Common();
+	libra_preset_ctx_t ctx = nullptr;
+	libra_shader_preset_t preset = nullptr;
+	// The context is only honoured (and only freed by librashader) when options are passed.
+	libra_preset_opt_t popt = {};
+	popt.version = LIBRASHADER_CURRENT_VERSION;
+
+	libra_error_t err = c.preset_ctx_create(&ctx);
+	if (!err) err = c.preset_ctx_set_core_name(&ctx, "PCSX2");
+	if (!err) err = c.preset_create_with_options(absolute_preset_path.c_str(), &ctx, &popt, &preset);
+	if (err)
+	{
+		Error::SetString(error, ShaderChain::DescribeAndFreeError(err));
+		if (ctx) c.preset_ctx_free(&ctx);
+		return false;
+	}
+	// libra_preset_create_with_options invalidates the context on success (header contract), so
+	// only the failure path above frees it. Mirrors GSDeviceMTL::EnsureShaderChain.
+
+	libra_preset_param_list_t list = {};
+	err = c.preset_get_runtime_params(&preset, &list);
+	if (err)
+	{
+		Error::SetString(error, ShaderChain::DescribeAndFreeError(err));
+		c.preset_free(&preset);
+		return false;
+	}
+
+	out->reserve(static_cast<size_t>(list.length));
+	for (u64 i = 0; i < list.length; i++)
+	{
+		const libra_preset_param_t& p = list.parameters[i];
+		ParameterInfo info;
+		info.name = p.name ? p.name : "";
+		info.description = p.description ? p.description : "";
+		info.initial = p.initial;
+		info.minimum = p.minimum;
+		info.maximum = p.maximum;
+		info.step = p.step;
+		out->push_back(std::move(info));
+	}
+
+	if (libra_error_t ferr = c.preset_free_runtime_params(list))
+		WARNING_LOG("ShaderChainParams: freeing runtime params failed: {}", ShaderChain::DescribeAndFreeError(ferr));
+	c.preset_free(&preset);
+	return true;
 }
