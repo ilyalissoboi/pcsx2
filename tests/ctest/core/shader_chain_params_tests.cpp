@@ -286,3 +286,39 @@ TEST(ShaderChainParams, EnumerateParametersFailsForMissingPreset)
 	EXPECT_FALSE(ShaderChainParams::EnumerateParameters("/definitely/not/here.slangp", &params, &error));
 	EXPECT_FALSE(error.GetDescription().empty());
 }
+
+TEST(ShaderChainParams, PersistActivePresetWritesBaseWhenGameLayerHasNoPreset)
+{
+	MemorySettingsInterface base, game;
+	base.SetStringValue("EmuCore/GS", "ShaderChainPreset", "a.slangp");
+	game.SetBoolValue("EmuCore/GS", "ShaderChainEnabled", false); // unrelated per-game key must not attract the write
+
+	SettingsInterface* const target = ShaderChainParams::PersistActivePresetIn(&base, &game, "b.slangp");
+	EXPECT_EQ(target, &base);
+	EXPECT_EQ(base.GetStringValue("EmuCore/GS", "ShaderChainPreset"), "b.slangp");
+	EXPECT_TRUE(base.GetBoolValue("EmuCore/GS", "ShaderChainEnabled", false));
+	EXPECT_FALSE(game.ContainsValue("EmuCore/GS", "ShaderChainPreset"));
+	EXPECT_FALSE(game.GetBoolValue("EmuCore/GS", "ShaderChainEnabled", true));
+}
+
+TEST(ShaderChainParams, PersistActivePresetWritesGameLayerWhenItOverridesPreset)
+{
+	MemorySettingsInterface base, game;
+	base.SetStringValue("EmuCore/GS", "ShaderChainPreset", "a.slangp");
+	game.SetStringValue("EmuCore/GS", "ShaderChainPreset", "g.slangp");
+
+	SettingsInterface* const target = ShaderChainParams::PersistActivePresetIn(&base, &game, "b.slangp");
+	EXPECT_EQ(target, &game);
+	EXPECT_EQ(game.GetStringValue("EmuCore/GS", "ShaderChainPreset"), "b.slangp");
+	EXPECT_TRUE(game.GetBoolValue("EmuCore/GS", "ShaderChainEnabled", false));
+	EXPECT_EQ(base.GetStringValue("EmuCore/GS", "ShaderChainPreset"), "a.slangp");
+	EXPECT_FALSE(base.ContainsValue("EmuCore/GS", "ShaderChainEnabled"));
+}
+
+TEST(ShaderChainParams, PersistActivePresetHandlesMissingLayers)
+{
+	MemorySettingsInterface base;
+	EXPECT_EQ(ShaderChainParams::PersistActivePresetIn(&base, nullptr, "b.slangp"), &base);
+	EXPECT_EQ(base.GetStringValue("EmuCore/GS", "ShaderChainPreset"), "b.slangp");
+	EXPECT_EQ(ShaderChainParams::PersistActivePresetIn(nullptr, nullptr, "b.slangp"), nullptr);
+}

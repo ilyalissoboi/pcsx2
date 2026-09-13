@@ -1220,7 +1220,7 @@ static void HotkeyCycleShaderPreset(bool forward)
 	Host::AddKeyedOSDMessage("ShaderChainHotkey",
 		fmt::format(TRANSLATE_FS("Hotkeys", "Shader preset: {}."), Path::GetFileTitle(preset)), Host::OSD_QUICK_DURATION);
 
-	// Runtime-only, like the other graphics hotkeys: nothing is written to the INI.
+	// Apply at runtime first so the change is visible immediately, then persist below.
 	EmuConfig.GS.ShaderChainPreset = preset;
 	EmuConfig.GS.ShaderChainEnabled = true;
 	MTGS::RunOnGSThread([preset]() {
@@ -1228,6 +1228,8 @@ static void HotkeyCycleShaderPreset(bool forward)
 		GSConfig.ShaderChainEnabled = true;
 	});
 	ShaderChainParams::ApplyOverridesToStore(preset);
+	// Persist so the settings dialog, the parameter editor and Add Current follow the picture.
+	ShaderChainParams::PersistActivePreset(preset);
 }
 
 BEGIN_HOTKEY_LIST(g_gs_hotkeys){"Screenshot", TRANSLATE_NOOP("Hotkeys", "Graphics"),

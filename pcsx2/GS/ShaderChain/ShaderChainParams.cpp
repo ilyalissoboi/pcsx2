@@ -4,6 +4,7 @@
 #include "GS/ShaderChain/ShaderChainParams.h"
 #include "GS/ShaderChain/LibrashaderLoader.h"
 #include "common/Error.h"
+#include "common/SettingsInterface.h"
 #include "Config.h"
 #include "Host.h"
 
@@ -201,4 +202,42 @@ bool ShaderChainParams::EnumerateParameters(const std::string& absolute_preset_p
 		WARNING_LOG("ShaderChainParams: freeing runtime params failed: {}", ShaderChain::DescribeAndFreeError(ferr));
 	c.preset_free(&preset);
 	return true;
+}
+
+SettingsInterface* ShaderChainParams::PersistActivePresetIn(SettingsInterface* base, SettingsInterface* game, const std::string& preset)
+{
+	SettingsInterface* const target = (game && game->ContainsValue("EmuCore/GS", "ShaderChainPreset")) ? game : base;
+	if (!target)
+		return nullptr;
+
+	target->SetStringValue("EmuCore/GS", "ShaderChainPreset", preset.c_str());
+	target->SetBoolValue("EmuCore/GS", "ShaderChainEnabled", true);
+	return target;
+}
+
+void ShaderChainParams::PersistActivePreset(const std::string& preset)
+{
+	bool base_changed = false;
+	{
+		auto lock = Host::GetSettingsLock();
+		SettingsInterface* const base = Host::Internal::GetBaseSettingsLayer();
+		SettingsInterface* const game = Host::Internal::GetGameSettingsLayer();
+		SettingsInterface* const target = PersistActivePresetIn(base, game, preset);
+		if (!target)
+			return;
+
+		if (target == game)
+		{
+			Error error;
+			if (!game->Save(&error))
+				WARNING_LOG("ShaderChain: failed to save per-game settings: {}", error.GetDescription());
+		}
+		else
+		{
+			base_changed = true;
+		}
+	}
+	// Commit outside the lock: the host implementation takes the settings lock itself.
+	if (base_changed)
+		Host::CommitBaseSettingChanges();
 }

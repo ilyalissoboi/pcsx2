@@ -10,6 +10,7 @@
 #include <vector>
 
 class Error;
+class SettingsInterface;
 
 /// User overrides for a preset's #pragma parameters, their INI representation, and favourites stepping.
 /// No GPU code here; everything is safe on the CPU and UI threads.
@@ -60,4 +61,14 @@ namespace ShaderChainParams
 	std::string NextFavorite(const std::vector<std::string>& favorites, std::string_view current, bool forward);
 	std::string NextFavoriteIn(const std::string& shaders_root, const std::vector<std::string>& favorites,
 		std::string_view current, bool forward);
+
+	/// Writes `preset` as EmuCore/GS/ShaderChainPreset and sets ShaderChainEnabled = true in the layer
+	/// that currently defines the preset: `game` when it contains the key, otherwise `base`. Either may
+	/// be null. Returns the layer written (null when nothing was written) so the caller can save it.
+	SettingsInterface* PersistActivePresetIn(SettingsInterface* base, SettingsInterface* game, const std::string& preset);
+
+	/// PersistActivePresetIn() on the live settings layers under the settings lock, then saves the
+	/// written layer (Host::CommitBaseSettingChanges() for the base layer, SettingsInterface::Save()
+	/// for the game layer). Used by the preset-cycling hotkeys so the UI and the picture agree.
+	void PersistActivePreset(const std::string& preset);
 } // namespace ShaderChainParams

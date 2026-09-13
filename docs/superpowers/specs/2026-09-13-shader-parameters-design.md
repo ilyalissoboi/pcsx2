@@ -101,12 +101,12 @@ namespace ShaderChainParams
 
 ### 5.2 Hotkeys
 
-Three new entries in `g_gs_hotkeys` (`pcsx2/GS/GS.cpp`), category `Graphics`, following the `CycleTVShader` pattern (`if (pressed) return;`, `Host::AddKeyedOSDMessage`, write `EmuConfig.GS`, mirror to `GSConfig` with `MTGS::RunOnGSThread`). They appear automatically in the Hotkeys settings page through `InputManager::GetHotkeyList()`. All three are runtime-only and do not write the INI, like the existing graphics hotkeys.
+Three new entries in `g_gs_hotkeys` (`pcsx2/GS/GS.cpp`), category `Graphics`, following the `CycleTVShader` pattern (`if (pressed) return;`, `Host::AddKeyedOSDMessage`, write `EmuConfig.GS`, mirror to `GSConfig` with `MTGS::RunOnGSThread`). They appear automatically in the Hotkeys settings page through `InputManager::GetHotkeyList()`. `ToggleShaderChain` is runtime-only like the existing graphics hotkeys. `NextShaderPreset` and `PreviousShaderPreset` also persist the chosen preset and `ShaderChainEnabled = true` into the layer that currently defines the preset (the running game's per-game INI when it contains `ShaderChainPreset`, otherwise the global INI), so the Preset field, `Parameters...` and `Add Current` follow the picture. Decided after user acceptance testing on 2026-09-13.
 
 | Hotkey | Behaviour | OSD |
 |---|---|---|
 | `ToggleShaderChain` | Flips `EmuConfig.GS.ShaderChainEnabled`, mirrors it to `GSConfig`. | `Shader chain enabled.` / `Shader chain disabled.` |
-| `NextShaderPreset` | Reads `EmuCore/GS/ShaderChainFavorites` via `Host::GetStringListSetting`, calls `NextFavorite(favorites, EmuConfig.GS.ShaderChainPreset, true)`. On a hit: sets `EmuConfig.GS.ShaderChainPreset`, sets `EmuConfig.GS.ShaderChainEnabled = true` if it was off, mirrors both to `GSConfig`, calls `ApplyOverridesToStore(new preset)`. | `Shader preset: <file stem>.` or `No shader presets in favourites list.` |
+| `NextShaderPreset` | Reads `EmuCore/GS/ShaderChainFavorites` via `Host::GetStringListSetting`, calls `NextFavorite(favorites, EmuConfig.GS.ShaderChainPreset, true)`. On a hit: sets `EmuConfig.GS.ShaderChainPreset`, sets `EmuConfig.GS.ShaderChainEnabled = true` if it was off, mirrors both to `GSConfig`, calls `ApplyOverridesToStore(new preset)`, then `ShaderChainParams::PersistActivePreset(new preset)`. | `Shader preset: <file stem>.` or `No shader presets in favourites list.` |
 | `PreviousShaderPreset` | Same with `forward = false`. | Same |
 
 Favourites whose file is missing are skipped silently by `NextFavorite`; the hotkey logs one Console warning listing the skipped entries. The OSD key is `ShaderChainHotkey` for all three so consecutive presses replace one message.
@@ -178,6 +178,7 @@ Files: `pcsx2-qt/ShaderFavoritesDialog.{h,cpp,ui}`. Modal, global only. Construc
 | librashader unavailable | Parameters and Favorites buttons disabled with the group (existing gating) |
 | Favourite file missing | skipped by hotkeys with one Console warning; italic in the dialog; never removed automatically |
 | Empty or all-missing favourites | OSD "No shader presets in favourites list." |
+| Game Properties open while a cycle hotkey writes the per-game layer | the dialog's own copy of the INI may overwrite the hotkey's change on its next save; reopen the dialog after cycling |
 
 Known limitations: clearing a game's settings from Game Properties does not remove its `[ShaderChainParams]` section; delete the game INI to drop stale overrides.
 
