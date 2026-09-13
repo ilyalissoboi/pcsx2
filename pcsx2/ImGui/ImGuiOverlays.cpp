@@ -964,6 +964,16 @@ __ri void ImGuiManager::DrawSettingsOverlay(float scale, float margin, float spa
 		if (GSConfig.HWROVBarriersVK)
 			APPEND("RBVK ");
 
+		if (GSConfig.ShaderChainEnabled && !GSConfig.ShaderChainPreset.empty())
+		{
+			constexpr size_t MAX_STEM = 32;
+			const std::string_view stem = Path::GetFileTitle(GSConfig.ShaderChainPreset);
+			if (stem.size() > MAX_STEM)
+				APPEND("SC={}... ", stem.substr(0, MAX_STEM));
+			else
+				APPEND("SC={} ", stem);
+		}
+
 		// deliberately test global and print local here for auto values
 		if (EmuConfig.GS.TextureFiltering != BiFiltering::PS2)
 			APPEND("BF={} ", static_cast<unsigned>(GSConfig.TextureFiltering));

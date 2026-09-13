@@ -21,6 +21,7 @@
 #include "GS/Renderers/Null/GSRendererNull.h"
 #include "GS/Renderers/HW/GSRendererHW.h"
 #include "GS/Renderers/HW/GSTextureReplacements.h"
+#include "GS/ShaderChain/ShaderChainParams.h"
 #include "VMManager.h"
 
 #ifdef ENABLE_OPENGL
@@ -1205,6 +1206,30 @@ static void HotkeyToggleOSD()
 		GSConfig.OsdPerformancePos == OsdOverlayPos::None ? EmuConfig.GS.OsdPerformancePos : OsdOverlayPos::None;
 }
 
+static void HotkeyCycleShaderPreset(bool forward)
+{
+	const std::vector<std::string> favorites = Host::GetStringListSetting("EmuCore/GS", "ShaderChainFavorites");
+	const std::string preset = ShaderChainParams::NextFavorite(favorites, EmuConfig.GS.ShaderChainPreset, forward);
+	if (preset.empty())
+	{
+		Host::AddKeyedOSDMessage("ShaderChainHotkey",
+			TRANSLATE_STR("Hotkeys", "No shader presets in favourites list."), Host::OSD_QUICK_DURATION);
+		return;
+	}
+
+	Host::AddKeyedOSDMessage("ShaderChainHotkey",
+		fmt::format(TRANSLATE_FS("Hotkeys", "Shader preset: {}."), Path::GetFileTitle(preset)), Host::OSD_QUICK_DURATION);
+
+	// Runtime-only, like the other graphics hotkeys: nothing is written to the INI.
+	EmuConfig.GS.ShaderChainPreset = preset;
+	EmuConfig.GS.ShaderChainEnabled = true;
+	MTGS::RunOnGSThread([preset]() {
+		GSConfig.ShaderChainPreset = preset;
+		GSConfig.ShaderChainEnabled = true;
+	});
+	ShaderChainParams::ApplyOverridesToStore(preset);
+}
+
 BEGIN_HOTKEY_LIST(g_gs_hotkeys){"Screenshot", TRANSLATE_NOOP("Hotkeys", "Graphics"),
 	TRANSLATE_NOOP("Hotkeys", "Save Screenshot"),
 	[](s32 pressed) {
@@ -1368,6 +1393,31 @@ BEGIN_HOTKEY_LIST(g_gs_hotkeys){"Screenshot", TRANSLATE_NOOP("Hotkeys", "Graphic
 
 			EmuConfig.GS.TVShader = new_shader;
 			MTGS::RunOnGSThread([new_shader]() { GSConfig.TVShader = new_shader; });
+		}},
+	{"ToggleShaderChain", TRANSLATE_NOOP("Hotkeys", "Graphics"), TRANSLATE_NOOP("Hotkeys", "Toggle Shader Chain"),
+		[](s32 pressed) {
+			if (pressed)
+				return;
+
+			const bool enabled = !EmuConfig.GS.ShaderChainEnabled;
+			Host::AddKeyedOSDMessage("ShaderChainHotkey",
+				enabled ? TRANSLATE_STR("Hotkeys", "Shader chain enabled.") : TRANSLATE_STR("Hotkeys", "Shader chain disabled."),
+				Host::OSD_QUICK_DURATION);
+
+			EmuConfig.GS.ShaderChainEnabled = enabled;
+			MTGS::RunOnGSThread([enabled]() { GSConfig.ShaderChainEnabled = enabled; });
+		}},
+	{"NextShaderPreset", TRANSLATE_NOOP("Hotkeys", "Graphics"), TRANSLATE_NOOP("Hotkeys", "Next Shader Preset"),
+		[](s32 pressed) {
+			if (pressed)
+				return;
+			HotkeyCycleShaderPreset(true);
+		}},
+	{"PreviousShaderPreset", TRANSLATE_NOOP("Hotkeys", "Graphics"), TRANSLATE_NOOP("Hotkeys", "Previous Shader Preset"),
+		[](s32 pressed) {
+			if (pressed)
+				return;
+			HotkeyCycleShaderPreset(false);
 		}},
 		{"CycleBlendingAccuracy", TRANSLATE_NOOP("Hotkeys", "Graphics"), TRANSLATE_NOOP("Hotkeys", "Cycle Blending Accuracy"),
 			[](s32 pressed) {
