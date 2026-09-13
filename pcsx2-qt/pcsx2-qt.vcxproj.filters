@@ -146,6 +146,7 @@
     <ClCompile Include="ShaderPackDownloadDialog.cpp" />
     <ClCompile Include="ShaderPresetPickerDialog.cpp" />
     <ClCompile Include="ShaderParametersDialog.cpp" />
+    <ClCompile Include="ShaderFavoritesDialog.cpp" />
     <ClCompile Include="ShortcutCreationDialog.cpp" />
     <ClCompile Include="QtProgressCallback.cpp" />
     <ClCompile Include="Settings\AchievementSettingsWidget.cpp">
@@ -406,6 +407,7 @@
     <QtMoc Include="ShaderPackDownloadDialog.h" />
     <QtMoc Include="ShaderPresetPickerDialog.h" />
     <QtMoc Include="ShaderParametersDialog.h" />
+    <QtMoc Include="ShaderFavoritesDialog.h" />
     <QtMoc Include="QtProgressCallback.h" />
     <QtMoc Include="ShortcutCreationDialog.h" />
     <QtMoc Include="Settings\AchievementLoginDialog.h">
@@ -791,6 +793,7 @@
     <QtUi Include="ShaderPackDownloadDialog.ui" />
     <QtUi Include="ShaderPresetPickerDialog.ui" />
     <QtUi Include="ShaderParametersDialog.ui" />
+    <QtUi Include="ShaderFavoritesDialog.ui" />
     <QtUi Include="MainWindow.ui" />
     <QtUi Include="SetupWizardDialog.ui" />
     <QtUi Include="ShortcutCreationDialog.ui" />

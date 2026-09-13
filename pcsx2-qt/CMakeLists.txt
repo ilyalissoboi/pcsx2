@@ -43,6 +43,9 @@ target_sources(pcsx2-qt PRIVATE
 	ShaderParametersDialog.cpp
 	ShaderParametersDialog.h
 	ShaderParametersDialog.ui
+	ShaderFavoritesDialog.cpp
+	ShaderFavoritesDialog.h
+	ShaderFavoritesDialog.ui
 	Themes.cpp
 	Translations.cpp
 	QtHost.cpp

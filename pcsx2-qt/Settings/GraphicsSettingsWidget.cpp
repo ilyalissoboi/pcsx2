@@ -8,6 +8,7 @@
 #include "ShaderPackDownloadDialog.h"
 #include "ShaderPresetPickerDialog.h"
 #include "ShaderParametersDialog.h"
+#include "ShaderFavoritesDialog.h"
 #include <QtWidgets/QMessageBox>
 
 #include "pcsx2/Host.h"
@@ -1076,7 +1077,8 @@ void GraphicsSettingsWidget::onShaderChainParametersClicked()
 
 void GraphicsSettingsWidget::onShaderChainFavoritesClicked()
 {
-	// Wired to ShaderFavoritesDialog in the next task.
+	ShaderFavoritesDialog dlg(this, dialog()->getEffectiveStringValue("EmuCore/GS", "ShaderChainPreset", ""));
+	dlg.exec();
 }
 
 void GraphicsSettingsWidget::onTextureDumpChanged()
