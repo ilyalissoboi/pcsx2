@@ -70,7 +70,9 @@ namespace ShaderChainParams
 	const char* SettingsSection(); // "ShaderChainParams"
 
 	/// Reads the layered override list for the preset and pushes it into ShaderPresets::Params().
-	/// An empty or missing list pushes an empty ParamList, which resets the chain to defaults.
+	/// Backends only set the parameters in the list; a freshly built chain starts from the preset
+	/// defaults, so this is complete after a preset change. The editor dialog pushes every
+	/// parameter explicitly so that resetting one takes effect on a live chain.
 	void ApplyOverridesToStore(std::string_view preset_relative_path);
 
 	/// Next (forward) or previous entry of the favourites list relative to `current`, wrapping
@@ -94,7 +96,8 @@ namespace ShaderChainParams
 
 - `VMManager::ApplySettings()` (CPU thread, runs on every settings apply, VM start and per-game reload) calls `ShaderChainParams::ApplyOverridesToStore(EmuConfig.GS.ShaderChainPreset)` after `LoadSettings()`. The call is unconditional; re-pushing an unchanged list costs a handful of `set_param` calls on the next frame.
 - The editor dialog pushes on the UI thread after each edit. The store is mutex-protected and the backends compare the snapshot's preset against the live one, so a push for a preset that is not active is ignored.
-- Ordering with chain rebuilds needs no extra work: a rebuilt chain resets the backend's last-seen generation, so the current snapshot is applied on the first frame of the new chain.
+- Backends only `set_param` the parameters the pushed list contains; they never restore the ones it omits. So an empty or shortened list does not reset a live chain, and the editor dialog pushes *every* parameter (not only the ones that differ from their default) so that resetting one takes effect immediately.
+- Ordering with chain rebuilds needs no extra work: a rebuilt chain resets the backend's last-seen generation, so the current snapshot is applied on the first frame of the new chain. A rebuilt chain also starts from the preset defaults, which is why the shorter list `ApplyOverridesToStore` pushes is complete after a preset change.
 
 ### 5.2 Hotkeys
 
@@ -110,7 +113,7 @@ Favourites whose file is missing are skipped silently by `NextFavorite`; the hot
 
 ### 5.3 Settings overlay
 
-`ImGuiManager::DrawSettingsOverlay` (`pcsx2/ImGui/ImGuiOverlays.cpp`) appends `SC=<stem> ` in the hardware-renderer block when `GSConfig.ShaderChainEnabled` is set and `GSConfig.ShaderChainPreset` is non-empty, where `<stem>` is the preset file name without extension, truncated to 32 characters with a trailing `…`. This matches the overlay's compact `IR=` / `BL=` style.
+`ImGuiManager::DrawSettingsOverlay` (`pcsx2/ImGui/ImGuiOverlays.cpp`) appends `SC=<stem> ` in the hardware-renderer block when `GSConfig.ShaderChainEnabled` is set and `GSConfig.ShaderChainPreset` is non-empty, where `<stem>` is the preset file name without extension, truncated to 32 characters with a trailing `...` (ASCII, since the overlay font is not guaranteed to have the ellipsis glyph). This matches the overlay's compact `IR=` / `BL=` style.
 
 ## 6. Qt UI
 
@@ -133,15 +136,15 @@ Loading:
 
 1. Title `Shader Parameters - <file stem>`.
 2. Resolve the absolute path with `ShaderPresets::ResolvePresetPath`; call `EnumerateParameters`. On failure the body shows a single label with the error text and only `Close` is enabled. Zero parameters shows "This preset has no adjustable parameters."
-3. Read the effective override list: per-game window uses `settings->getSettingsInterface()->GetStringList(section, key)` when the key exists there, otherwise `Host::GetBaseStringListSetting`; global window uses the base list. Parse with `ParseOverrides`. Persisted values outside the parameter's range are clamped for display only; the INI is left untouched until the row is edited.
+3. Read the effective override list: per-game window uses `settings->getSettingsInterface()->GetStringList(section, key)` when the key exists there, otherwise `Host::GetBaseStringListSetting`; global window uses the base list. Parse with `ParseOverrides`. Persisted values outside the parameter's range are clamped into the widget range; the clamped value is pushed live and persisted on the next write.
 
 Body: a `QScrollArea` over a `QGridLayout`, one row per parameter:
 
 | Column | Widget | Behaviour |
 |---|---|---|
 | 0 | `QLabel` description (falls back to name when empty) | tooltip shows the raw parameter name |
-| 1 | `QSlider` horizontal | integer positions `0..N`, `N = min(round((max-min)/step), 10000)`; position `p` maps to `min + p*step` |
-| 2 | `QDoubleSpinBox` | range `[min,max]`, `singleStep = step`, decimals = digits needed for `step` (1 gives 0, 0.5 gives 1, 0.01 gives 2, capped at 4) |
+| 1 | `QSlider` horizontal | integer positions `0..N`, `N = min(round((max-min)/step), 10000)`; position `p` maps to `min + p*step`, except the last position, which maps exactly to `max` (when `N` is capped the increment is `(max-min)/N` instead of `step`) |
+| 2 | `QDoubleSpinBox` | range `[min,max]`, `singleStep = step`, decimals = digits needed for `step` (1 gives 0, 0.5 gives 1, 0.01 gives 2, 0.0001 gives 4, capped at 4) |
 | 3 | `QPushButton` "Reset" | enabled only while the value differs from `initial`; sets the value to `initial` |
 
 Slider and spin box update each other behind a re-entrancy guard. Parameters with `step <= 0` or `max <= min` show only the spin box with an unbounded range, no slider.
@@ -150,10 +153,11 @@ Footer: `Reset All` (per-game window: `Use Global Settings`), `Close`.
 
 Applying and persisting:
 
-- Every value change rebuilds the override list (entries whose value equals `initial` within `step/2` are dropped), pushes it to `ShaderPresets::Params().Set(preset, list)` immediately, and restarts a 250 ms single-shot `QTimer`.
+- Every value change rebuilds the override list (entries whose value equals `initial` within a relative tolerance of 1e-6 are dropped) for the INI write, pushes the full parameter list to `ShaderPresets::Params().Set(preset, list)` immediately, and restarts a 250 ms single-shot `QTimer`.
+- Live pushes happen only when the dialog edits the effective layer: the per-game window pushes only while that game is running, and the global window pushes only when the running game has no per-game key for the preset. The INI write is unconditional.
 - The timer writes the list: global window `Host::SetBaseStringListSettingValue(section, key, entries)` then `Host::CommitBaseSettingChanges()`; per-game window `getSettingsInterface()->SetStringList(...)` then `settings->saveAndReloadGameSettings()`. An empty list removes the key (`DeleteValue` / `RemoveBaseSettingValue`) instead of writing an empty list. After writing, the dialog pushes the store once more so a settings apply that raced the write cannot leave stale values live.
 - `Close` and `reject()` flush a pending write first.
-- Per-game semantics: a per-game list replaces the global list wholesale, so the first per-game edit writes the full effective list into the per-game key. `Use Global Settings` removes the per-game key, reloads, re-reads the effective (global) list and refreshes every row. `Reset All` in the global window sets every row to `initial`, which removes the key.
+- Per-game semantics: a per-game list replaces the global list wholesale, so the first per-game edit writes the full effective list into the per-game key. `Use Global Settings` removes the per-game key, reloads, re-reads the effective (global) list and refreshes every row. `Reset All` in the global window sets every row to `initial`, which removes the key. "All defaults" cannot be expressed per game: an emptied per-game list falls back to the global list.
 
 ### 6.3 `ShaderFavoritesDialog`
 
@@ -169,11 +173,13 @@ Files: `pcsx2-qt/ShaderFavoritesDialog.{h,cpp,ui}`. Modal, global only. Construc
 |---|---|
 | Malformed override entry | skipped with Console warning; rest of the list applies |
 | Unknown parameter name in list | passed to the store; librashader `set_param` rejects it, the backend logs and continues (existing behaviour) |
-| Persisted value out of range | dialog clamps for display; INI unchanged until edited |
+| Persisted value out of range | dialog clamps into the widget range; the clamped value is pushed live and persisted on the next write |
 | Preset fails to enumerate | dialog shows the error text; hotkeys unaffected (they never call librashader) |
 | librashader unavailable | Parameters and Favorites buttons disabled with the group (existing gating) |
 | Favourite file missing | skipped by hotkeys with one Console warning; italic in the dialog; never removed automatically |
 | Empty or all-missing favourites | OSD "No shader presets in favourites list." |
+
+Known limitations: clearing a game's settings from Game Properties does not remove its `[ShaderChainParams]` section; delete the game INI to drop stale overrides.
 
 ## 8. Testing
 
