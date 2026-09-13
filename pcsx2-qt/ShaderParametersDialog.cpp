@@ -74,14 +74,11 @@ void ShaderParametersDialog::done(int r)
 
 bool ShaderParametersDialog::eventFilter(QObject* watched, QEvent* event)
 {
-	// Prevent wheel events from editing unfocused sliders/spin boxes while scrolling the parameter list.
-	if (event->type() == QEvent::Wheel && !watched->property("focus").isValid())
+	// Wheel events over an unfocused slider/spin box scroll the list instead of editing the parameter.
+	if (event->type() == QEvent::Wheel && !static_cast<QWidget*>(watched)->hasFocus())
 	{
-		if (!static_cast<QWidget*>(watched)->hasFocus())
-		{
-			QApplication::sendEvent(m_ui.scroll->viewport(), event);
-			return true;
-		}
+		QApplication::sendEvent(m_ui.scroll->viewport(), event);
+		return true;
 	}
 	return QDialog::eventFilter(watched, event);
 }
