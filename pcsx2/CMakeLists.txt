@@ -103,6 +103,8 @@ set(pcsx2Sources
 	R5900OpcodeImpl.cpp
 	R5900OpcodeTables.cpp
 	SaveState.cpp
+	ShaderPackArchive.cpp
+	ShaderPacks.cpp
 	ShiftJisToUnicode.cpp
 	Sif.cpp
 	Sif0.cpp
@@ -181,6 +183,8 @@ set(pcsx2Headers
 	R5900OpcodeTables.h
 	SaveState.h
 	ShaderCacheVersion.h
+	ShaderPackArchive.h
+	ShaderPacks.h
 	Sifcmd.h
 	Sif.h
 	SIO/Sio.h
@@ -1152,6 +1156,8 @@ target_link_libraries(PCSX2_FLAGS INTERFACE
 	fmt::fmt
 	libchdr
 	libzip::zip
+	rapidjson
+
 	cpuinfo
 	cubeb
 	rcheevos

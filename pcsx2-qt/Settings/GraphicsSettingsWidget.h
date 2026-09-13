@@ -45,8 +45,11 @@ private Q_SLOTS:
 	void onTextureReplacementChanged();
 	void onShadeBoostChanged();
 	void onShaderChainEnabledChanged();
-	void onShaderChainRefreshClicked();
+	void onShaderChainBrowseClicked();
+	void onShaderChainClearClicked();
+	void onShaderChainUseGlobalClicked();
 	void onShaderChainOpenFolderClicked();
+	void onShaderChainDownloadClicked();
 	void onCaptureContainerChanged();
 	void onCaptureCodecChanged();
 	void onEnableVideoCaptureChanged();
@@ -59,7 +62,7 @@ private:
 	GSRendererType getEffectiveRenderer() const;
 	void updateRendererDependentOptions();
 	void populateUpscaleMultipliers(u32 max_upscale_multiplier);
-	void populateShaderChainPresets(bool add_global_item);
+	void updateShaderChainPresetDisplay();
 	void updateShaderChainAvailability();
 
 	Ui::GraphicsSettingsHeader m_header;

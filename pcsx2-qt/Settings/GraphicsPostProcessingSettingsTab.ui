@@ -274,30 +274,68 @@
        </widget>
       </item>
       <item row="1" column="1">
-       <widget class="QComboBox" name="shaderChainPreset">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-          <horstretch>1</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
+       <widget class="QLineEdit" name="shaderChainPreset">
+        <property name="readOnly">
+         <bool>true</bool>
+        </property>
+        <property name="placeholderText">
+         <string>(None)</string>
         </property>
        </widget>
       </item>
       <item row="1" column="2">
-       <widget class="QPushButton" name="shaderChainRefresh">
+       <widget class="QPushButton" name="shaderChainBrowse">
         <property name="text">
-         <string>Refresh</string>
+         <string>Browse...</string>
         </property>
        </widget>
       </item>
       <item row="1" column="3">
-       <widget class="QPushButton" name="shaderChainOpenFolder">
+       <widget class="QPushButton" name="shaderChainClear">
         <property name="text">
-         <string>Open Folder...</string>
+         <string>Clear</string>
         </property>
        </widget>
       </item>
-      <item row="2" column="0" colspan="4">
+      <item row="2" column="1" colspan="3">
+       <layout class="QHBoxLayout" name="shaderChainActionsLayout">
+        <item>
+         <widget class="QPushButton" name="shaderChainUseGlobal">
+          <property name="text">
+           <string>Use Global Setting</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="shaderChainOpenFolder">
+          <property name="text">
+           <string>Open Folder...</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="shaderChainDownload">
+          <property name="text">
+           <string>Download Shader Packs...</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="shaderChainActionsSpacer">
+          <property name="orientation">
+           <enum>Qt::Orientation::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>0</width>
+            <height>0</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+      <item row="3" column="0" colspan="4">
        <widget class="QLabel" name="shaderChainStatus">
         <property name="text">
          <string/>
@@ -337,8 +375,11 @@
   <tabstop>shadeBoostSaturation</tabstop>
   <tabstop>shaderChainEnabled</tabstop>
   <tabstop>shaderChainPreset</tabstop>
-  <tabstop>shaderChainRefresh</tabstop>
+  <tabstop>shaderChainBrowse</tabstop>
+  <tabstop>shaderChainClear</tabstop>
+  <tabstop>shaderChainUseGlobal</tabstop>
   <tabstop>shaderChainOpenFolder</tabstop>
+  <tabstop>shaderChainDownload</tabstop>
  </tabstops>
  <resources/>
  <connections/>
