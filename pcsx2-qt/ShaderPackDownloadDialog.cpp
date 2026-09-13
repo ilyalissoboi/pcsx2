@@ -41,6 +41,7 @@ ShaderPackDownloadDialog::ShaderPackDownloadDialog(QWidget* parent /*= nullptr*/
 	refreshStatuses();
 
 	// Look up the latest versions in the background; statuses update when it finishes.
+	m_ui.progress->setVisible(false);
 	std::vector<std::string> all_ids;
 	for (const ShaderPacks::PackInfo& pack : ShaderPacks::GetPacks())
 		all_ids.emplace_back(pack.id);
@@ -192,6 +193,7 @@ void ShaderPackDownloadDialog::onWorkerFinished()
 	}
 
 	m_worker.reset();
+	m_ui.progress->setVisible(false);
 	refreshStatuses();
 	updateEnabled();
 }
@@ -269,6 +271,7 @@ void ShaderPackDownloadDialog::startWorker(Mode mode, std::vector<std::string> i
 	connect(m_worker.get(), &Worker::progressUpdated, this, &ShaderPackDownloadDialog::onWorkerProgress);
 	connect(m_worker.get(), &Worker::threadFinished, this, &ShaderPackDownloadDialog::onWorkerFinished);
 	m_ui.progress->setValue(0);
+	m_ui.progress->setVisible(mode != Mode::Resolve);
 	m_worker->start();
 	updateEnabled();
 }
@@ -281,6 +284,7 @@ void ShaderPackDownloadDialog::cancelWorker()
 	m_worker->requestInterruption();
 	m_worker->join();
 	m_worker.reset();
+	m_ui.progress->setVisible(false);
 	m_ui.status->setText(tr("Cancelled."));
 	refreshStatuses();
 	updateEnabled();

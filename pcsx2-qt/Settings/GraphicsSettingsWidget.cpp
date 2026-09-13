@@ -17,6 +17,7 @@
 #include "pcsx2/GS/ShaderChain/LibrashaderLoader.h"
 #include "common/Path.h"
 #include <QtCore/QUrl>
+#include <optional>
 
 struct RendererInfo
 {
@@ -227,18 +228,19 @@ GraphicsSettingsWidget::GraphicsSettingsWidget(SettingsWindow* settings_dialog, 
 	connect(m_post.shadeBoost, &QCheckBox::checkStateChanged, this, &GraphicsSettingsWidget::onShadeBoostChanged);
 	onShadeBoostChanged();
 
-	// Shader chain (librashader). The combobox is the bound widget (per-game "Use Global Setting" relies on the
-	// QComboBox binder, which reads currentData() and selects via findData()), but it only ever lists the current
-	// preset; browsing happens in ShaderPresetPickerDialog.
-	setShaderChainPresetItems(false, QString::fromStdString(dialog()->getEffectiveStringValue("EmuCore/GS", "ShaderChainPreset", "")));
+	// Shader chain (librashader). The preset is shown in a read-only field and written directly through the
+	// settings window (per-game layer or global), so no SettingWidgetBinder is involved.
+	m_post.shaderChainUseGlobal->setVisible(dialog()->isPerGameSettings());
 	SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_post.shaderChainEnabled, "EmuCore/GS", "ShaderChainEnabled", false);
-	SettingWidgetBinder::BindWidgetToStringSetting(sif, m_post.shaderChainPreset, "EmuCore/GS", "ShaderChainPreset", "");
 	connect(m_post.shaderChainEnabled, &QCheckBox::checkStateChanged, this, &GraphicsSettingsWidget::onShaderChainEnabledChanged);
 	connect(m_post.shaderChainBrowse, &QPushButton::clicked, this, &GraphicsSettingsWidget::onShaderChainBrowseClicked);
+	connect(m_post.shaderChainClear, &QPushButton::clicked, this, &GraphicsSettingsWidget::onShaderChainClearClicked);
+	connect(m_post.shaderChainUseGlobal, &QPushButton::clicked, this, &GraphicsSettingsWidget::onShaderChainUseGlobalClicked);
 	connect(m_post.shaderChainOpenFolder, &QPushButton::clicked, this, &GraphicsSettingsWidget::onShaderChainOpenFolderClicked);
 	connect(m_post.shaderChainDownload, &QPushButton::clicked, this, &GraphicsSettingsWidget::onShaderChainDownloadClicked);
 
 	updateShaderChainAvailability();
+	updateShaderChainPresetDisplay();
 	onShaderChainEnabledChanged();
 
 	//////////////////////////////////////////////////////////////////////////
@@ -755,6 +757,10 @@ GraphicsSettingsWidget::GraphicsSettingsWidget(SettingsWindow* settings_dialog, 
 			tr("Preset file to apply, relative to the Shaders folder. Use Browse... to pick one from the installed shader packs. Presets that reference other shaders (for example the libretro shaders_slang pack) must be installed with their directory structure intact."));
 		dialog()->registerWidgetHelp(m_post.shaderChainBrowse, tr("Browse"), tr("N/A"),
 			tr("Opens a searchable tree of the presets found in the Shaders folder."));
+		dialog()->registerWidgetHelp(m_post.shaderChainClear, tr("Clear"), tr("N/A"),
+			tr("Removes the preset so no shader chain is applied."));
+		dialog()->registerWidgetHelp(m_post.shaderChainUseGlobal, tr("Use Global Setting"), tr("N/A"),
+			tr("Drops this game's preset override and uses the global setting again."));
 		dialog()->registerWidgetHelp(m_post.shaderChainDownload, tr("Download Shader Packs"), tr("N/A"),
 			tr("Downloads the libretro slang shaders, the Retro Crisis GDV-NTSC presets and the satpixie CRT shader into the Shaders folder, "
 			   "and keeps them up to date."));
@@ -951,21 +957,23 @@ void GraphicsSettingsWidget::onShadeBoostChanged()
 	m_post.shadeBoostSaturation->setEnabled(enabled);
 }
 
-void GraphicsSettingsWidget::setShaderChainPresetItems(bool add_global_item, const QString& current)
+void GraphicsSettingsWidget::updateShaderChainPresetDisplay()
 {
-	// Items: [Use Global Setting (per-game only)], (None), <current preset>. Ends on (None) so that a
-	// subsequent setCurrentIndex() to the preset item always emits currentIndexChanged for the binder.
-	QSignalBlocker blocker(m_post.shaderChainPreset);
-	m_post.shaderChainPreset->clear();
-	if (add_global_item)
+	const bool per_game = dialog()->isPerGameSettings();
+	const std::optional<std::string> layer_value = dialog()->getStringValue("EmuCore/GS", "ShaderChainPreset", std::nullopt);
+	if (per_game && !layer_value.has_value())
 	{
 		const std::string global_value = Host::GetBaseStringSettingValue("EmuCore/GS", "ShaderChainPreset", "");
-		m_post.shaderChainPreset->addItem(tr("Use Global Setting [%1]").arg(global_value.empty() ? tr("(None)") : QString::fromStdString(global_value)));
+		m_post.shaderChainPreset->clear();
+		m_post.shaderChainPreset->setPlaceholderText(
+			tr("Use Global Setting [%1]").arg(global_value.empty() ? tr("(None)") : QString::fromStdString(global_value)));
+		m_post.shaderChainUseGlobal->setEnabled(false);
+		return;
 	}
-	m_post.shaderChainPreset->addItem(tr("(None)"), QString());
-	if (!current.isEmpty())
-		m_post.shaderChainPreset->addItem(current, current);
-	m_post.shaderChainPreset->setCurrentIndex(add_global_item ? 1 : 0);
+
+	m_post.shaderChainPreset->setText(QString::fromStdString(layer_value.value_or(std::string())));
+	m_post.shaderChainPreset->setPlaceholderText(tr("(None)"));
+	m_post.shaderChainUseGlobal->setEnabled(per_game);
 }
 
 void GraphicsSettingsWidget::updateShaderChainAvailability()
@@ -999,17 +1007,35 @@ void GraphicsSettingsWidget::onShaderChainEnabledChanged()
 	const bool enabled = dialog()->getEffectiveBoolValue("EmuCore/GS", "ShaderChainEnabled", false);
 	m_post.shaderChainPreset->setEnabled(enabled);
 	m_post.shaderChainBrowse->setEnabled(enabled);
+	m_post.shaderChainClear->setEnabled(enabled);
+	m_post.shaderChainUseGlobal->setEnabled(enabled && dialog()->isPerGameSettings() &&
+	                                        dialog()->containsSettingValue("EmuCore/GS", "ShaderChainPreset"));
 }
 
 void GraphicsSettingsWidget::onShaderChainBrowseClicked()
 {
-	ShaderPresetPickerDialog dlg(this, m_post.shaderChainPreset->currentData().toString());
+	ShaderPresetPickerDialog dlg(this, QString::fromStdString(dialog()->getEffectiveStringValue("EmuCore/GS", "ShaderChainPreset", "")));
 	if (dlg.exec() != QDialog::Accepted || dlg.selectedPreset().isEmpty())
 		return;
 
-	const QString preset = dlg.selectedPreset();
-	setShaderChainPresetItems(dialog()->isPerGameSettings(), preset); // leaves the combobox on (None)
-	m_post.shaderChainPreset->setCurrentIndex(m_post.shaderChainPreset->findData(preset)); // fires the binder
+	const std::string preset = dlg.selectedPreset().toStdString();
+	dialog()->setStringSettingValue("EmuCore/GS", "ShaderChainPreset", preset.c_str());
+	updateShaderChainPresetDisplay();
+	onShaderChainEnabledChanged();
+}
+
+void GraphicsSettingsWidget::onShaderChainClearClicked()
+{
+	dialog()->setStringSettingValue("EmuCore/GS", "ShaderChainPreset", "");
+	updateShaderChainPresetDisplay();
+	onShaderChainEnabledChanged();
+}
+
+void GraphicsSettingsWidget::onShaderChainUseGlobalClicked()
+{
+	dialog()->removeSettingValue("EmuCore/GS", "ShaderChainPreset");
+	updateShaderChainPresetDisplay();
+	onShaderChainEnabledChanged();
 }
 
 void GraphicsSettingsWidget::onShaderChainOpenFolderClicked()
