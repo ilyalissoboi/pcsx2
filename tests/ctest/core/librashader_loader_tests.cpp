@@ -6,6 +6,21 @@
 #include "common/Path.h"
 #include <gtest/gtest.h>
 
+namespace
+{
+	void SetEnvVar(const char* name, const char* value)
+	{
+#ifdef _WIN32
+		_putenv_s(name, value);
+#else
+		if (value[0] == '\0')
+			unsetenv(name);
+		else
+			setenv(name, value, 1);
+#endif
+	}
+} // namespace
+
 TEST(LibrashaderLoader, MissingLibraryIsUnavailableWithReason)
 {
 	const std::string path = "/definitely/not/here/librashader.dylib";
@@ -31,6 +46,11 @@ TEST(LibrashaderLoader, WrongLibraryIsUnavailableBecauseSymbolsAreMissing)
 
 TEST(LibrashaderLoader, DefaultPathHasPlatformFileName)
 {
+	// The environment override would replace the platform default, so drop it for this test.
+	const char* previous = std::getenv("PCSX2_LIBRASHADER_PATH");
+	const std::string saved = previous ? previous : "";
+	SetEnvVar("PCSX2_LIBRASHADER_PATH", "");
+
 	const std::string path = ShaderChain::GetDefaultLibraryPath();
 #ifdef _WIN32
 	EXPECT_TRUE(path.ends_with("librashader.dll")) << path;
@@ -39,27 +59,14 @@ TEST(LibrashaderLoader, DefaultPathHasPlatformFileName)
 #else
 	EXPECT_TRUE(path.ends_with("librashader.so")) << path;
 #endif
+
+	SetEnvVar("PCSX2_LIBRASHADER_PATH", saved.c_str());
 }
 
 TEST(LibrashaderLoader, DescribeNullErrorDoesNotCrash)
 {
 	EXPECT_EQ(ShaderChain::DescribeAndFreeError(nullptr), "unknown librashader error");
 }
-
-namespace
-{
-	void SetEnvVar(const char* name, const char* value)
-	{
-#ifdef _WIN32
-		_putenv_s(name, value);
-#else
-		if (value[0] == '\0')
-			unsetenv(name);
-		else
-			setenv(name, value, 1);
-#endif
-	}
-} // namespace
 
 TEST(LibrashaderLoader, EnvironmentOverrideWinsOverDefaultPath)
 {

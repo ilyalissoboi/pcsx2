@@ -15,6 +15,7 @@
 #include "fmt/ranges.h" // fmt::join
 
 #include <algorithm>
+#include <cmath>
 
 namespace
 {
@@ -47,10 +48,16 @@ ShaderChainParams::ParamList ShaderChainParams::ParseOverrides(const std::vector
 
 		const std::string_view name = Trim(std::string_view(entry).substr(0, eq));
 		const std::string_view value_str = Trim(std::string_view(entry).substr(eq + 1));
-		const std::optional<float> value = StringUtil::FromChars<float>(value_str);
-		if (name.empty() || !value.has_value())
+		if (name.empty())
 		{
-			WARNING_LOG("ShaderChainParams: ignoring malformed override '{}'.", entry);
+			WARNING_LOG("ShaderChainParams: ignoring override '{}' (empty name).", entry);
+			continue;
+		}
+
+		const std::optional<float> value = StringUtil::FromChars<float>(value_str);
+		if (!value.has_value())
+		{
+			WARNING_LOG("ShaderChainParams: ignoring override '{}' (non-numeric value).", entry);
 			continue;
 		}
 
@@ -80,6 +87,21 @@ void ShaderChainParams::ApplyOverridesToStore(std::string_view preset_relative_p
 	if (!preset.empty())
 		params = ParseOverrides(Host::GetStringListSetting(SettingsSection(), preset.c_str()));
 	ShaderPresets::Params().Set(std::move(preset), std::move(params));
+}
+
+int ShaderChainParams::DecimalsForStep(float step)
+{
+	if (!(step > 0.0f))
+		return 3;
+	// Small bias so 0.01f (slightly below 0.01) still yields 2, not 3.
+	const double digits = std::ceil(-std::log10(static_cast<double>(step)) - 1e-6);
+	return std::clamp(static_cast<int>(digits), 0, 4);
+}
+
+bool ShaderChainParams::IsDefaultValue(float value, float initial)
+{
+	const float tolerance = 1e-6f * std::max(1.0f, std::abs(initial));
+	return std::abs(value - initial) <= tolerance;
 }
 
 std::string ShaderChainParams::NextFavoriteIn(const std::string& shaders_root, const std::vector<std::string>& favorites,

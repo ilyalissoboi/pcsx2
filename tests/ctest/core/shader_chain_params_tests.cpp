@@ -3,8 +3,10 @@
 
 #include "GS/ShaderChain/ShaderChainParams.h"
 #include "GS/ShaderChain/LibrashaderLoader.h"
+#include "Host.h"
 #include "common/Error.h"
 #include "common/FileSystem.h"
+#include "common/MemorySettingsInterface.h"
 #include "common/Path.h"
 #include <gtest/gtest.h>
 #include <filesystem>
@@ -37,6 +39,23 @@ namespace
 
 	private:
 		std::string m_root;
+	};
+
+	/// Installs a settings layer for the duration of a test. The game layer is used because the base
+	/// layer may only be set once per process (Host::Internal::SetBaseSettingsLayer asserts on reset),
+	/// and it is consulted before the base layer by LayeredSettingsInterface.
+	class ScopedSettingsLayer
+	{
+	public:
+		explicit ScopedSettingsLayer(SettingsInterface* sif) { Install(sif); }
+		~ScopedSettingsLayer() { Install(nullptr); }
+
+	private:
+		static void Install(SettingsInterface* sif)
+		{
+			auto lock = Host::GetSettingsLock();
+			Host::Internal::SetGameSettingsLayer(sif, lock);
+		}
 	};
 } // namespace
 
@@ -90,6 +109,54 @@ TEST(ShaderChainParams, FormatOverridesOfEmptyListIsEmpty)
 {
 	EXPECT_TRUE(ShaderChainParams::FormatOverrides({}).empty());
 	EXPECT_STREQ(ShaderChainParams::SettingsSection(), "ShaderChainParams");
+}
+
+TEST(ShaderChainParams, DecimalsForStepFollowsStepMagnitude)
+{
+	EXPECT_EQ(ShaderChainParams::DecimalsForStep(1.0f), 0);
+	EXPECT_EQ(ShaderChainParams::DecimalsForStep(0.5f), 1);
+	EXPECT_EQ(ShaderChainParams::DecimalsForStep(0.05f), 2);
+	EXPECT_EQ(ShaderChainParams::DecimalsForStep(0.01f), 2);
+	EXPECT_EQ(ShaderChainParams::DecimalsForStep(0.001f), 3);
+	EXPECT_EQ(ShaderChainParams::DecimalsForStep(0.0001f), 4);
+	EXPECT_EQ(ShaderChainParams::DecimalsForStep(0.000001f), 4);
+	EXPECT_EQ(ShaderChainParams::DecimalsForStep(16.0f), 0);
+	EXPECT_EQ(ShaderChainParams::DecimalsForStep(100.0f), 0);
+	EXPECT_EQ(ShaderChainParams::DecimalsForStep(0.0f), 3);
+	EXPECT_EQ(ShaderChainParams::DecimalsForStep(-1.0f), 3);
+}
+
+TEST(ShaderChainParams, IsDefaultValueUsesTightRelativeTolerance)
+{
+	EXPECT_TRUE(ShaderChainParams::IsDefaultValue(1.0f, 1.0f));
+	EXPECT_TRUE(ShaderChainParams::IsDefaultValue(0.1f * 3.0f, 0.3f));       // slider arithmetic noise
+	EXPECT_FALSE(ShaderChainParams::IsDefaultValue(1.02f, 1.0f));            // typed value near default, step 0.05
+	EXPECT_FALSE(ShaderChainParams::IsDefaultValue(1008.0f, 1000.0f));       // coarse step 16
+	EXPECT_TRUE(ShaderChainParams::IsDefaultValue(1000.0f + 0.0001f, 1000.0f)); // within float noise at 1000
+	EXPECT_FALSE(ShaderChainParams::IsDefaultValue(0.0f, 0.001f));
+}
+
+TEST(ShaderChainParams, ApplyOverridesToStorePushesParsedListForPreset)
+{
+	MemorySettingsInterface layer;
+	layer.SetStringList("ShaderChainParams", "shaders_slang/crt/x.slangp", {"GAMMA=2.4", "bad", "SIZE=3"});
+	const ScopedSettingsLayer scoped_layer(&layer);
+
+	ShaderChainParams::ApplyOverridesToStore("shaders_slang/crt/x.slangp");
+	std::string preset;
+	ShaderChainParams::ParamList params;
+	const u64 gen1 = ShaderPresets::Params().Snapshot(&preset, &params);
+	EXPECT_EQ(preset, "shaders_slang/crt/x.slangp");
+	ASSERT_EQ(params.size(), 2u);
+	EXPECT_EQ(params[0].first, "GAMMA");
+	EXPECT_FLOAT_EQ(params[0].second, 2.4f);
+	EXPECT_EQ(params[1].first, "SIZE");
+
+	ShaderChainParams::ApplyOverridesToStore("other.slangp"); // no key -> empty list, generation bumps
+	const u64 gen2 = ShaderPresets::Params().Snapshot(&preset, &params);
+	EXPECT_GT(gen2, gen1);
+	EXPECT_EQ(preset, "other.slangp");
+	EXPECT_TRUE(params.empty());
 }
 
 TEST(ShaderChainParams, NextFavoriteStepsAndWraps)

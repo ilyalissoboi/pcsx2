@@ -41,8 +41,18 @@ namespace ShaderChainParams
 	const char* SettingsSection();
 
 	/// Reads the layered override list for the preset and pushes it into ShaderPresets::Params().
-	/// A missing list pushes an empty ParamList, which resets the chain to its defaults.
+	/// Backends only set the parameters in the list; a freshly built chain starts from the preset
+	/// defaults, so this is complete after a preset change. The editor dialog pushes every
+	/// parameter explicitly so that resetting one takes effect on a live chain.
 	void ApplyOverridesToStore(std::string_view preset_relative_path);
+
+	/// Spin-box decimals for a parameter step: 1 -> 0, 0.5 -> 1, 0.05 -> 2, 0.01 -> 2, 0.001 -> 3,
+	/// 0.0001 -> 4, 1e-6 -> 4 (capped), 16 -> 0, 100 -> 0, step <= 0 -> 3.
+	int DecimalsForStep(float step);
+
+	/// True when `value` equals the preset default within a small relative epsilon
+	/// (1e-6 * max(1, |initial|)). Used to decide which parameters are persisted.
+	bool IsDefaultValue(float value, float initial);
 
 	/// Next (forward) or previous entry of `favorites` relative to `current`, wrapping around and
 	/// skipping entries whose file does not exist under the shaders root. If `current` is not in
