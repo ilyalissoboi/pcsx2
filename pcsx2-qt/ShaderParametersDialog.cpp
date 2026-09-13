@@ -11,7 +11,10 @@
 #include "common/Path.h"
 #include "common/SettingsInterface.h"
 
+#include <QtCore/QEvent>
 #include <QtCore/QTimer>
+#include <QtGui/QWheelEvent>
+#include <QtWidgets/QApplication>
 #include <QtWidgets/QDoubleSpinBox>
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QPushButton>
@@ -69,6 +72,20 @@ void ShaderParametersDialog::done(int r)
 	QDialog::done(r);
 }
 
+bool ShaderParametersDialog::eventFilter(QObject* watched, QEvent* event)
+{
+	// Prevent wheel events from editing unfocused sliders/spin boxes while scrolling the parameter list.
+	if (event->type() == QEvent::Wheel && !watched->property("focus").isValid())
+	{
+		if (!static_cast<QWidget*>(watched)->hasFocus())
+		{
+			QApplication::sendEvent(m_ui.scroll->viewport(), event);
+			return true;
+		}
+	}
+	return QDialog::eventFilter(watched, event);
+}
+
 bool ShaderParametersDialog::loadParameters()
 {
 	const std::string path = ShaderPresets::ResolvePresetPath(m_preset);
@@ -124,6 +141,8 @@ void ShaderParametersDialog::buildRows()
 			row.slider = new QSlider(Qt::Horizontal, m_ui.scrollContents);
 			row.slider->setRange(0, std::max(steps, 1));
 			row.slider->setMinimumWidth(180);
+			row.slider->setFocusPolicy(Qt::StrongFocus);
+			row.slider->installEventFilter(this);
 			grid->addWidget(row.slider, grid_row, 1);
 			connect(row.slider, &QSlider::valueChanged, this, [this, i](int pos) {
 				Row& r = m_rows[i];
@@ -145,6 +164,9 @@ void ShaderParametersDialog::buildRows()
 			row.spin->setDecimals(DecimalsForStep(info.step));
 		}
 		row.spin->setMinimumWidth(90);
+		row.spin->setKeyboardTracking(false);
+		row.spin->setFocusPolicy(Qt::StrongFocus);
+		row.spin->installEventFilter(this);
 		grid->addWidget(row.spin, grid_row, 2);
 		connect(row.spin, &QDoubleSpinBox::valueChanged, this, [this, i](double v) {
 			onValueEdited(m_rows[i], static_cast<float>(v));
