@@ -58,6 +58,9 @@ private:
 	void refreshRowWidgets(Row& row);
 	bool isDefault(const Row& row) const;
 	ShaderChainParams::ParamList collectOverrides() const;
+	/// True when this dialog's settings layer is the one the running chain reads from, i.e. when a
+	/// live push would be visible. Per-game windows only qualify while that game is running.
+	bool isEditingEffectiveLayer() const;
 	void pushToStore();
 	void scheduleWrite();
 	void onValueEdited(Row& row, float value);

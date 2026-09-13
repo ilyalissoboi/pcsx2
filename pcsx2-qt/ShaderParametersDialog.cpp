@@ -6,6 +6,7 @@
 
 #include "pcsx2/GS/ShaderChain/ShaderPresets.h"
 #include "pcsx2/Host.h"
+#include "pcsx2/VMManager.h"
 
 #include "common/Error.h"
 #include "common/Path.h"
@@ -22,21 +23,6 @@
 
 #include <algorithm>
 #include <cmath>
-
-namespace
-{
-	int DecimalsForStep(float step)
-	{
-		int decimals = 0;
-		double s = step;
-		while (decimals < 4 && std::abs(s - std::round(s)) > 1e-4)
-		{
-			s *= 10.0;
-			decimals++;
-		}
-		return decimals;
-	}
-} // namespace
 
 ShaderParametersDialog::ShaderParametersDialog(SettingsWindow* settings, QWidget* parent, std::string preset)
 	: QDialog(parent)
@@ -75,7 +61,8 @@ void ShaderParametersDialog::done(int r)
 bool ShaderParametersDialog::eventFilter(QObject* watched, QEvent* event)
 {
 	// Wheel events over an unfocused slider/spin box scroll the list instead of editing the parameter.
-	if (event->type() == QEvent::Wheel && !static_cast<QWidget*>(watched)->hasFocus())
+	QWidget* const widget = qobject_cast<QWidget*>(watched);
+	if (event->type() == QEvent::Wheel && widget && !widget->hasFocus())
 	{
 		QApplication::sendEvent(m_ui.scroll->viewport(), event);
 		return true;
@@ -132,9 +119,13 @@ void ShaderParametersDialog::buildRows()
 		const bool degenerate = (info.step <= 0.0f || info.maximum <= info.minimum);
 		if (!degenerate)
 		{
-			const int steps = static_cast<int>(std::min<double>(
-				std::round((info.maximum - info.minimum) / info.step), static_cast<double>(MAX_SLIDER_STEPS)));
-			row.slider_increment = (info.maximum - info.minimum) / static_cast<float>(std::max(steps, 1));
+			// One position per whole step, so a position is exactly minimum + p * step. Ranges with
+			// more steps than the slider can carry are capped, which stretches the increment.
+			const double whole_steps = std::round((info.maximum - info.minimum) / info.step);
+			const int steps = static_cast<int>(std::min<double>(whole_steps, static_cast<double>(MAX_SLIDER_STEPS)));
+			row.slider_increment = (whole_steps <= static_cast<double>(MAX_SLIDER_STEPS)) ?
+									   info.step :
+									   (info.maximum - info.minimum) / static_cast<float>(MAX_SLIDER_STEPS);
 			row.slider = new QSlider(Qt::Horizontal, m_ui.scrollContents);
 			row.slider->setRange(0, std::max(steps, 1));
 			row.slider->setMinimumWidth(180);
@@ -143,22 +134,27 @@ void ShaderParametersDialog::buildRows()
 			grid->addWidget(row.slider, grid_row, 1);
 			connect(row.slider, &QSlider::valueChanged, this, [this, i](int pos) {
 				Row& r = m_rows[i];
-				onValueEdited(r, r.info.minimum + static_cast<float>(pos) * r.slider_increment);
+				// The last position is the maximum exactly, even when the range is not a whole
+				// number of steps.
+				const float v = (pos >= r.slider->maximum()) ?
+									r.info.maximum :
+									r.info.minimum + static_cast<float>(pos) * r.slider_increment;
+				onValueEdited(r, v);
 			});
 		}
 
 		row.spin = new QDoubleSpinBox(m_ui.scrollContents);
+		// Decimals first: QDoubleSpinBox rounds the range and the step to the current precision.
+		row.spin->setDecimals(ShaderChainParams::DecimalsForStep(info.step));
 		if (degenerate)
 		{
 			row.spin->setRange(-1.0e9, 1.0e9);
 			row.spin->setSingleStep(info.step > 0.0f ? info.step : 1.0);
-			row.spin->setDecimals(info.step > 0.0f ? DecimalsForStep(info.step) : 3);
 		}
 		else
 		{
 			row.spin->setRange(info.minimum, info.maximum);
 			row.spin->setSingleStep(info.step);
-			row.spin->setDecimals(DecimalsForStep(info.step));
 		}
 		row.spin->setMinimumWidth(90);
 		row.spin->setKeyboardTracking(false);
@@ -203,7 +199,8 @@ void ShaderParametersDialog::applyOverrides(const ShaderChainParams::ParamList& 
 		if (it != overrides.end())
 		{
 			value = it->second;
-			// Clamp for display only; the INI keeps the stored value until this row is edited.
+			// Out-of-range persisted values are clamped into the widget range; the clamped value is
+			// what gets pushed and, on the next write, persisted.
 			if (row.info.maximum > row.info.minimum)
 				value = std::clamp(value, row.info.minimum, row.info.maximum);
 		}
@@ -219,18 +216,21 @@ void ShaderParametersDialog::setRowValue(Row& row, float value)
 
 void ShaderParametersDialog::refreshRowWidgets(Row& row)
 {
+	const bool was_updating = m_updating;
 	m_updating = true;
 	if (row.slider)
-		row.slider->setValue(static_cast<int>(std::lround((row.value - row.info.minimum) / row.slider_increment)));
+	{
+		const int position = static_cast<int>(std::lround((row.value - row.info.minimum) / row.slider_increment));
+		row.slider->setValue(std::clamp(position, 0, row.slider->maximum()));
+	}
 	row.spin->setValue(row.value);
 	row.reset->setEnabled(!isDefault(row));
-	m_updating = false;
+	m_updating = was_updating;
 }
 
 bool ShaderParametersDialog::isDefault(const Row& row) const
 {
-	const float tolerance = (row.info.step > 0.0f ? row.info.step : 1e-6f) * 0.5f;
-	return std::abs(row.value - row.info.initial) < tolerance;
+	return ShaderChainParams::IsDefaultValue(row.value, row.info.initial);
 }
 
 ShaderChainParams::ParamList ShaderParametersDialog::collectOverrides() const
@@ -256,9 +256,34 @@ void ShaderParametersDialog::onValueEdited(Row& row, float value)
 	scheduleWrite();
 }
 
+bool ShaderParametersDialog::isEditingEffectiveLayer() const
+{
+	if (m_settings->isPerGameSettings())
+	{
+		// Game Properties may be open for a game that is not running; its values must not leak
+		// into whatever is on screen.
+		return VMManager::HasValidVM() && VMManager::GetDiscSerial() == m_settings->getSerial() &&
+			   VMManager::GetDiscCRC() == m_settings->getDiscCRC();
+	}
+
+	// Global window: a running game's per-game key overrides the global list wholesale.
+	auto lock = Host::GetSettingsLock();
+	SettingsInterface* const game_layer = Host::Internal::GetGameSettingsLayer();
+	return !game_layer || !game_layer->ContainsValue(ShaderChainParams::SettingsSection(), m_preset.c_str());
+}
+
 void ShaderParametersDialog::pushToStore()
 {
-	ShaderPresets::Params().Set(m_preset, collectOverrides());
+	if (!isEditingEffectiveLayer())
+		return;
+
+	// Push every parameter, not only the overrides: the backends only set what the list contains,
+	// so a value reset to its default has to be sent explicitly to take effect on a live chain.
+	ShaderChainParams::ParamList list;
+	list.reserve(m_rows.size());
+	for (const Row& row : m_rows)
+		list.emplace_back(row.info.name, row.value);
+	ShaderPresets::Params().Set(m_preset, std::move(list));
 }
 
 void ShaderParametersDialog::scheduleWrite()
