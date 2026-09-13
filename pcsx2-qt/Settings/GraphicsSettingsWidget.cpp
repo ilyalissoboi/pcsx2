@@ -5,7 +5,9 @@
 #include "QtUtils.h"
 #include "SettingWidgetBinder.h"
 #include "SettingsWindow.h"
+#include "ShaderFavoritesDialog.h"
 #include "ShaderPackDownloadDialog.h"
+#include "ShaderParametersDialog.h"
 #include "ShaderPresetPickerDialog.h"
 #include <QtWidgets/QMessageBox>
 
@@ -238,6 +240,13 @@ GraphicsSettingsWidget::GraphicsSettingsWidget(SettingsWindow* settings_dialog, 
 	connect(m_post.shaderChainUseGlobal, &QPushButton::clicked, this, &GraphicsSettingsWidget::onShaderChainUseGlobalClicked);
 	connect(m_post.shaderChainOpenFolder, &QPushButton::clicked, this, &GraphicsSettingsWidget::onShaderChainOpenFolderClicked);
 	connect(m_post.shaderChainDownload, &QPushButton::clicked, this, &GraphicsSettingsWidget::onShaderChainDownloadClicked);
+	connect(m_post.shaderChainParameters, &QPushButton::clicked, this, &GraphicsSettingsWidget::onShaderChainParametersClicked);
+	connect(m_post.shaderChainFavorites, &QPushButton::clicked, this, &GraphicsSettingsWidget::onShaderChainFavoritesClicked);
+	if (dialog()->isPerGameSettings())
+	{
+		m_post.shaderChainFavorites->setEnabled(false);
+		m_post.shaderChainFavorites->setToolTip(tr("Favourites are shared by all games and can be edited in the global settings."));
+	}
 
 	updateShaderChainAvailability();
 	updateShaderChainPresetDisplay();
@@ -764,6 +773,11 @@ GraphicsSettingsWidget::GraphicsSettingsWidget(SettingsWindow* settings_dialog, 
 		dialog()->registerWidgetHelp(m_post.shaderChainDownload, tr("Download Shader Packs"), tr("N/A"),
 			tr("Downloads the libretro slang shaders, the Retro Crisis GDV-NTSC presets and the satpixie CRT shader into the Shaders folder, "
 			   "and keeps them up to date."));
+		dialog()->registerWidgetHelp(m_post.shaderChainParameters, tr("Parameters"), tr("N/A"),
+			tr("Opens an editor for the selected preset's adjustable parameters. Changes apply immediately while a game is running and are "
+			   "saved per preset, globally or for this game only."));
+		dialog()->registerWidgetHelp(m_post.shaderChainFavorites, tr("Favorites"), tr("N/A"),
+			tr("Edits the ordered list of presets that the Next Shader Preset and Previous Shader Preset hotkeys cycle through."));
 	}
 
 	// Recording tab
@@ -1010,6 +1024,8 @@ void GraphicsSettingsWidget::onShaderChainEnabledChanged()
 	m_post.shaderChainClear->setEnabled(enabled);
 	m_post.shaderChainUseGlobal->setEnabled(enabled && dialog()->isPerGameSettings() &&
 	                                        dialog()->containsSettingValue("EmuCore/GS", "ShaderChainPreset"));
+	m_post.shaderChainParameters->setEnabled(
+		enabled && !dialog()->getEffectiveStringValue("EmuCore/GS", "ShaderChainPreset", "").empty());
 }
 
 void GraphicsSettingsWidget::onShaderChainBrowseClicked()
@@ -1046,6 +1062,22 @@ void GraphicsSettingsWidget::onShaderChainOpenFolderClicked()
 void GraphicsSettingsWidget::onShaderChainDownloadClicked()
 {
 	ShaderPackDownloadDialog dlg(this);
+	dlg.exec();
+}
+
+void GraphicsSettingsWidget::onShaderChainParametersClicked()
+{
+	const std::string preset = dialog()->getEffectiveStringValue("EmuCore/GS", "ShaderChainPreset", "");
+	if (preset.empty())
+		return;
+
+	ShaderParametersDialog dlg(dialog(), this, preset);
+	dlg.exec();
+}
+
+void GraphicsSettingsWidget::onShaderChainFavoritesClicked()
+{
+	ShaderFavoritesDialog dlg(this, dialog()->getEffectiveStringValue("EmuCore/GS", "ShaderChainPreset", ""));
 	dlg.exec();
 }
 

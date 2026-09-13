@@ -34,9 +34,15 @@ target_sources(pcsx2-qt PRIVATE
 	SetupWizardDialog.cpp
 	SetupWizardDialog.h
 	SetupWizardDialog.ui
+	ShaderFavoritesDialog.cpp
+	ShaderFavoritesDialog.h
+	ShaderFavoritesDialog.ui
 	ShaderPackDownloadDialog.cpp
 	ShaderPackDownloadDialog.h
 	ShaderPackDownloadDialog.ui
+	ShaderParametersDialog.cpp
+	ShaderParametersDialog.h
+	ShaderParametersDialog.ui
 	ShaderPresetPickerDialog.cpp
 	ShaderPresetPickerDialog.h
 	ShaderPresetPickerDialog.ui

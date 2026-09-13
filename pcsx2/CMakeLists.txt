@@ -505,6 +505,7 @@ set(pcsx2GSSources
 	GS/MultiISA.cpp
 	GS/Renderers/Common/GSDevice.cpp
 	GS/ShaderChain/ShaderPresets.cpp
+	GS/ShaderChain/ShaderChainParams.cpp
 	GS/ShaderChain/LibrashaderLoader.cpp
 	GS/Renderers/Common/GSDirtyRect.cpp
 	GS/Renderers/Common/GSFunctionMap.cpp
@@ -547,6 +548,7 @@ set(pcsx2GSHeaders
 	GS/MultiISA.h
 	GS/Renderers/Common/GSDevice.h
 	GS/ShaderChain/ShaderPresets.h
+	GS/ShaderChain/ShaderChainParams.h
 	GS/ShaderChain/LibrashaderLoader.h
 	GS/Renderers/Common/GSDirtyRect.h
 	GS/Renderers/Common/GSFastList.h

@@ -143,7 +143,9 @@
       <Filter>Settings</Filter>
     </ClCompile>
     <ClCompile Include="CoverDownloadDialog.cpp" />
+    <ClCompile Include="ShaderFavoritesDialog.cpp" />
     <ClCompile Include="ShaderPackDownloadDialog.cpp" />
+    <ClCompile Include="ShaderParametersDialog.cpp" />
     <ClCompile Include="ShaderPresetPickerDialog.cpp" />
     <ClCompile Include="ShortcutCreationDialog.cpp" />
     <ClCompile Include="QtProgressCallback.cpp" />
@@ -402,7 +404,9 @@
     </QtMoc>
     <QtMoc Include="QtHost.h" />
     <QtMoc Include="CoverDownloadDialog.h" />
+    <QtMoc Include="ShaderFavoritesDialog.h" />
     <QtMoc Include="ShaderPackDownloadDialog.h" />
+    <QtMoc Include="ShaderParametersDialog.h" />
     <QtMoc Include="ShaderPresetPickerDialog.h" />
     <QtMoc Include="QtProgressCallback.h" />
     <QtMoc Include="ShortcutCreationDialog.h" />
@@ -786,7 +790,9 @@
     <QtUi Include="AboutDialog.ui" />
     <QtUi Include="AutoUpdaterDialog.ui" />
     <QtUi Include="CoverDownloadDialog.ui" />
+    <QtUi Include="ShaderFavoritesDialog.ui" />
     <QtUi Include="ShaderPackDownloadDialog.ui" />
+    <QtUi Include="ShaderParametersDialog.ui" />
     <QtUi Include="ShaderPresetPickerDialog.ui" />
     <QtUi Include="MainWindow.ui" />
     <QtUi Include="SetupWizardDialog.ui" />

@@ -1085,6 +1085,9 @@
     <ClCompile Include="GS\ShaderChain\ShaderPresets.cpp">
       <Filter>System\Ps2\GS\ShaderChain</Filter>
     </ClCompile>
+    <ClCompile Include="GS\ShaderChain\ShaderChainParams.cpp">
+      <Filter>System\Ps2\GS\ShaderChain</Filter>
+    </ClCompile>
     <ClCompile Include="GS\ShaderChain\LibrashaderLoader.cpp">
       <Filter>System\Ps2\GS\ShaderChain</Filter>
     </ClCompile>
@@ -2010,6 +2013,9 @@
       <Filter>System\Ps2\GS\Renderers\Common</Filter>
     </ClInclude>
     <ClInclude Include="GS\ShaderChain\ShaderPresets.h">
+      <Filter>System\Ps2\GS\ShaderChain</Filter>
+    </ClInclude>
+    <ClInclude Include="GS\ShaderChain\ShaderChainParams.h">
       <Filter>System\Ps2\GS\ShaderChain</Filter>
     </ClInclude>
     <ClInclude Include="GS\ShaderChain\LibrashaderLoader.h">

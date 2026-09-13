@@ -17,6 +17,7 @@
 #include "fmt/format.h"
 
 #include <mutex>
+#include <cstdlib>
 
 namespace
 {
@@ -106,6 +107,9 @@ namespace
 
 std::string ShaderChain::GetDefaultLibraryPath()
 {
+	// Tests and developers can point at a library outside the app bundle / exe directory.
+	if (const char* env = std::getenv("PCSX2_LIBRASHADER_PATH"); env && env[0] != '\0')
+		return env;
 #ifdef _WIN32
 	return Path::Combine(EmuFolders::AppRoot, "librashader.dll");
 #elif defined(__APPLE__)

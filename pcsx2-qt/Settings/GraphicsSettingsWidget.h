@@ -50,6 +50,8 @@ private Q_SLOTS:
 	void onShaderChainUseGlobalClicked();
 	void onShaderChainOpenFolderClicked();
 	void onShaderChainDownloadClicked();
+	void onShaderChainParametersClicked();
+	void onShaderChainFavoritesClicked();
 	void onCaptureContainerChanged();
 	void onCaptureCodecChanged();
 	void onEnableVideoCaptureChanged();

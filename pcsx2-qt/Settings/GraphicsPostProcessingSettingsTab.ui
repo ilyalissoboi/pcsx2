@@ -335,7 +335,38 @@
         </item>
        </layout>
       </item>
-      <item row="3" column="0" colspan="4">
+      <item row="3" column="1" colspan="3">
+       <layout class="QHBoxLayout" name="shaderChainEditorsLayout">
+        <item>
+         <widget class="QPushButton" name="shaderChainParameters">
+          <property name="text">
+           <string>Parameters...</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="shaderChainFavorites">
+          <property name="text">
+           <string>Favorites...</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="shaderChainEditorsSpacer">
+          <property name="orientation">
+           <enum>Qt::Orientation::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>0</width>
+            <height>0</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+      <item row="4" column="0" colspan="4">
        <widget class="QLabel" name="shaderChainStatus">
         <property name="text">
          <string/>
@@ -380,6 +411,8 @@
   <tabstop>shaderChainUseGlobal</tabstop>
   <tabstop>shaderChainOpenFolder</tabstop>
   <tabstop>shaderChainDownload</tabstop>
+  <tabstop>shaderChainParameters</tabstop>
+  <tabstop>shaderChainFavorites</tabstop>
  </tabstops>
  <resources/>
  <connections/>

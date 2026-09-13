@@ -13,6 +13,7 @@
 #include "FW.h"
 #include "GS.h"
 #include "GS/Renderers/HW/GSTextureReplacements.h"
+#include "GS/ShaderChain/ShaderChainParams.h"
 #include "GSDumpReplayer.h"
 #include "GameDatabase.h"
 #include "GameList.h"
@@ -770,6 +771,9 @@ void VMManager::ApplySettings()
 	EmuConfig = Pcsx2Config();
 	EmuConfig.CopyRuntimeConfig(old_config);
 	LoadSettings();
+	// Parameter overrides are not part of Pcsx2Config, so push them explicitly whenever settings
+	// (global or per-game layer) are reloaded. The GS thread re-applies them on the next frame.
+	ShaderChainParams::ApplyOverridesToStore(EmuConfig.GS.ShaderChainPreset);
 	CheckForConfigChanges(old_config);
 }
 
