@@ -5,10 +5,10 @@
 #include "QtUtils.h"
 #include "SettingWidgetBinder.h"
 #include "SettingsWindow.h"
-#include "ShaderPackDownloadDialog.h"
-#include "ShaderPresetPickerDialog.h"
-#include "ShaderParametersDialog.h"
 #include "ShaderFavoritesDialog.h"
+#include "ShaderPackDownloadDialog.h"
+#include "ShaderParametersDialog.h"
+#include "ShaderPresetPickerDialog.h"
 #include <QtWidgets/QMessageBox>
 
 #include "pcsx2/Host.h"
