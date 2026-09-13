@@ -279,7 +279,7 @@ Results (2026-09-13, user acceptance on the Mac build `build-sc/pcsx2-qt/PCSX2.a
   the flat preset combobox with a structured picker (section 7.1). Second round (Task 9): the tree picker
   works on both machines; the current preset is shown in a text field instead of a combobox; the
   downloader's progress bar is hidden when idle.
-- Windows D3D12 load of a downloaded Retro Crisis preset (item 8): not run yet.
+- Windows D3D12 load of a downloaded Retro Crisis preset (item 8): **passed** on 2026-09-13 — marker files present, `ShaderChain(D3D12): loaded .../retro crisis/4K Flat/RC GDV-NTSC - PS2 - Clean.slangp`, effect visible, 59.94 FPS at 100% speed, no librashader errors.
 
 Success criterion: a fresh PCSX2 data directory reaches a working RetroCrisis preset on both
 machines using only the dialog, and the unit tests pass on both.
