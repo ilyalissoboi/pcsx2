@@ -47,6 +47,9 @@ target_sources(pcsx2-qt PRIVATE
 	ShaderPresetPickerDialog.h
 	ShaderPresetPickerDialog.ui
 	Themes.cpp
+	ToolbarCustomizationDialog.cpp
+	ToolbarCustomizationDialog.h
+	ToolbarCustomizationDialog.ui
 	Translations.cpp
 	QtHost.cpp
 	QtHost.h

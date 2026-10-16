@@ -2449,6 +2449,7 @@ SCAJ-20179:
     nativeScaling: 2 # Fixes lighting smoothness.
     textureInsideRT: 1 # Fixes broken crystalline surface textures.
     bilinearUpscale: 2 # Fixes off axis texture corruption in some areas.
+    targetPageRearranging: 1 # Fixes issues with transitions reusing targets.
 SCAJ-20180:
   name: "Xenosaga Episode III - Also Sprach Zarathustra [Disc 2 of 2]"
   region: "NTSC-Unk"
@@ -2458,6 +2459,7 @@ SCAJ-20180:
     nativeScaling: 2 # Fixes lighting smoothness.
     textureInsideRT: 1 # Fixes broken crystalline surface textures.
     bilinearUpscale: 2 # Fixes off axis texture corruption in some areas.
+    targetPageRearranging: 1 # Fixes issues with transitions reusing targets.
 SCAJ-20181:
   name: "Minna no Tennis"
   region: "NTSC-Unk"
@@ -5998,6 +6000,7 @@ SCES-53247:
   gsHWFixes:
     roundSprite: 1 # Fixes misaligned text.
     autoFlush: 2 # Fixes sun luminosity.
+    nativeScaling: 2 # Helps align sun occasional.
   patches:
     CBBC2E7F:
       content: |-
@@ -14011,6 +14014,7 @@ SLED-52979:
   gsHWFixes:
     autoFlush: 2 # Fixes missing lighting.
     nativeScaling: 1 # Fixes post lighting.
+    textureInsideRT: 1 # Fixes binoculars.
     # halfPixelOffset: 1 # Fixes lighting misalignment. Do not enable this, it breaks a lot of graphics.
 SLED-53066:
   name: "TimeSplitters - Future Perfect"
@@ -14630,7 +14634,7 @@ SLES-50072:
   region: "PAL-E"
   compat: 5
   gsHWFixes:
-    getSkipCount: "GSC_SFEX3"
+    targetPageRearranging: 1 # Fixes overlay on bottom of screen.
     halfPixelOffset: 4 # Aligns post effects.
 SLES-50073:
   name: "Driving Emotion Type-S"
@@ -15587,7 +15591,7 @@ SLES-50479:
   gsHWFixes:
     halfPixelOffset: 2 # Fixes depth/fog lines.
     textureInsideRT: 1 # Fixes underwater levels.
-    getSkipCount: "GSC_Turok"
+    targetPageRearranging: 1 # Fixes rearranged clear problems introduced with Tex in RT.
 SLES-50480:
   name: "Aggressive Inline"
   region: "PAL-M4"
@@ -17114,7 +17118,7 @@ SLES-51124:
   gsHWFixes:
     halfPixelOffset: 2 # Fixes depth/fog lines.
     textureInsideRT: 1 # Fixes underwater levels.
-    getSkipCount: "GSC_Turok"
+    targetPageRearranging: 1 # Fixes rearranged clear problems introduced with Tex in RT.
 SLES-51125:
   name: "Sega Soccer Slam"
   region: "PAL-E"
@@ -19015,6 +19019,8 @@ SLES-51877:
 SLES-51879:
   name: "Hot Wheels World Race"
   region: "PAL-E"
+  gsHWFixes:
+    targetPageRearranging: 1 # Fixes top of screen corruption due to game bug.
 SLES-51881:
   name: "World Racing"
   region: "PAL-F-G"
@@ -20880,6 +20886,7 @@ SLES-52588:
   gsHWFixes:
     autoFlush: 2 # Fixes missing lighting.
     nativeScaling: 1 # Fixes post lighting.
+    textureInsideRT: 1 # Fixes binoculars.
     # halfPixelOffset: 1 # Fixes lighting misalignment. Do not enable this, it breaks a lot of graphics.
 SLES-52589:
   name: "Mercenaries - Playground of Destruction"
@@ -20887,6 +20894,7 @@ SLES-52589:
   gsHWFixes:
     autoFlush: 2 # Fixes missing lighting.
     nativeScaling: 1 # Fixes post lighting.
+    textureInsideRT: 1 # Fixes binoculars.
     # halfPixelOffset: 1 # Fixes lighting misalignment. Do not enable this, it breaks a lot of graphics.
 SLES-52590:
   name: "Mercenaries - Playground of Destruction"
@@ -20894,6 +20902,7 @@ SLES-52590:
   gsHWFixes:
     autoFlush: 2 # Fixes missing lighting.
     nativeScaling: 1 # Fixes post lighting.
+    textureInsideRT: 1 # Fixes binoculars.
     # halfPixelOffset: 1 # Fixes lighting misalignment. Do not enable this, it breaks a lot of graphics.
 SLES-52591:
   name: "Dynasty Warriors 4 - Empires"
@@ -21385,6 +21394,7 @@ SLES-52741:
   region: "PAL-E"
   gsHWFixes:
     halfPixelOffset: 5 # Fixes depth line and edge garbage.
+    nativeScaling: 4 # Softens and aligns bloom.
 SLES-52745:
   name: "Hugo - Cannon Cruise"
   region: "PAL-M4"
@@ -22197,6 +22207,7 @@ SLES-53008:
   gsHWFixes:
     autoFlush: 2 # Fixes missing lighting.
     nativeScaling: 1 # Fixes post lighting.
+    textureInsideRT: 1 # Fixes binoculars.
     # halfPixelOffset: 1 # Fixes lighting misalignment. Do not enable this, it breaks a lot of graphics.
 SLES-53009:
   name: "Dance Factory"
@@ -26245,6 +26256,7 @@ SLES-54317:
   compat: 5
   gsHWFixes:
     halfPixelOffset: 4 # Fixes alignment on fire effects.
+    nativeScaling: 2 # Softens and aligns bloom on fire effects.
 SLES-54319:
   name: "Biker Mice from Mars"
   region: "PAL-M5"
@@ -27242,6 +27254,7 @@ SLES-54581:
   region: "PAL-M5"
   gsHWFixes:
     halfPixelOffset: 5 # Fixes depth line and edge garbage.
+    nativeScaling: 4 # Softens and aligns bloom.
 SLES-54582:
   name: "International Tennis Pro"
   region: "PAL-E"
@@ -29869,6 +29882,9 @@ SLES-55355:
   gsHWFixes:
     halfPixelOffset: 4 # Mostly aligns post-processing.
     nativeScaling: 1 # Fixes post-processing smoothness and position.
+    targetPageRearranging: 1 # Fixes half screen issues.
+    preloadFrameData: 1 # Makes button text visible.
+    bilinearUpscale: 2 # Fixes button images when upscaling.
 SLES-55356:
   name: "Bratz - Girlz Really Rock"
   region: "PAL-M3"
@@ -35362,7 +35378,7 @@ SLPM-60105:
   name-en: "Street Fighter EX3 [Trial]"
   region: "NTSC-J"
   gsHWFixes:
-    getSkipCount: "GSC_SFEX3"
+    targetPageRearranging: 1 # Fixes overlay on bottom of screen.
     halfPixelOffset: 4 # Aligns post effects.
 SLPM-60106:
   name: "コーエー”プレイステーション2”ラインナップ [体験版]"
@@ -36070,7 +36086,7 @@ SLPM-60254:
 SLPM-60255:
   name: "ポンコツ浪漫大活劇バンピートロット [体験版]"
   name-sort: "ぽんこつろまんだいかつげきばんぴーとろっと [たいけんばん]"
-  name-en: "Ponkotsu Roeman Daikatsugeki Bumpy Trot [Trial]"
+  name-en: "Ponkotsu Roman Daikatsugeki Bumpy Trot [Trial]"
   region: "NTSC-J"
   roundModes:
     eeRoundMode: 0 # Fixes broken load triggers.
@@ -36143,7 +36159,7 @@ SLPM-60265:
 SLPM-60266:
   name: "ポンコツ浪漫大活劇バンピートロット [体験版]"
   name-sort: "ぽんこつろまんだいかつげきばんぴーとろっと [たいけんばん]"
-  name-en: "Ponkotsu Roeman Daikatsugeki Bumpy Trot [Trial]"
+  name-en: "Ponkotsu Roman Daikatsugeki Bumpy Trot [Trial]"
   region: "NTSC-J"
   roundModes:
     eeRoundMode: 0 # Fixes broken load triggers.
@@ -37051,6 +37067,7 @@ SLPM-61147:
     nativeScaling: 2 # Fixes lighting smoothness.
     textureInsideRT: 1 # Fixes broken crystalline surface textures.
     bilinearUpscale: 2 # Fixes off axis texture corruption in some areas.
+    targetPageRearranging: 1 # Fixes issues with transitions reusing targets.
 SLPM-61148:
   name: "グローランサーⅤ ジェネレーションズ [体験版]"
   name-sort: "ぐろーらんさー5 じぇねれーしょんず [たいけんばん]"
@@ -46752,6 +46769,7 @@ SLPM-65942:
   gsHWFixes:
     autoFlush: 2 # Fixes missing lighting.
     nativeScaling: 1 # Fixes post lighting.
+    textureInsideRT: 1 # Fixes binoculars.
     # halfPixelOffset: 1 # Fixes lighting misalignment. Do not enable this, it breaks a lot of graphics.
 SLPM-65943:
   name: "Angel's Feather −黒の残影−"
@@ -50103,6 +50121,7 @@ SLPM-66465:
   gsHWFixes:
     autoFlush: 2 # Fixes missing lighting.
     nativeScaling: 1 # Fixes post lighting.
+    textureInsideRT: 1 # Fixes binoculars.
     # halfPixelOffset: 1 # Fixes lighting misalignment. Do not enable this, it breaks a lot of graphics.
 SLPM-66467:
   name: "ゲーセンUSA ミッドウェイアーケードトレジャーズ"
@@ -54824,7 +54843,7 @@ SLPS-20003:
   name-en: "Street Fighter EX3"
   region: "NTSC-J"
   gsHWFixes:
-    getSkipCount: "GSC_SFEX3"
+    targetPageRearranging: 1 # Fixes overlay on bottom of screen.
     halfPixelOffset: 4 # Aligns post effects.
 SLPS-20004:
   name: "柿木将棋Ⅳ"
@@ -56656,6 +56675,7 @@ SLPS-20380:
   gsHWFixes:
     halfPixelOffset: 4 # Fixes ghosting.
     nativeScaling: 1 # Fixes post-processing.
+    targetPageRearranging: 1 # Fixes garbage on screen.
 SLPS-20381:
   name: "モンキーターンV"
   name-sort: "もんきーたーんV"
@@ -57516,7 +57536,7 @@ SLPS-25022:
 SLPS-25023:
   name: "バウンサー"
   name-sort: "ばうんさー"
-  name-en: "Bouncer, The"
+  name-en: "The Bouncer"
   region: "NTSC-J"
 SLPS-25024:
   name: "Disney's Dinosaur"
@@ -59157,7 +59177,7 @@ SLPS-25298:
 SLPS-25299:
   name: "新世紀エヴァンゲリオン2"
   name-sort: "しんせいきえゔぁんげりおん2"
-  name-en: "Shinseiki Evangelions 2"
+  name-en: "Shinseiki Evangelion 2"
   region: "NTSC-J"
 SLPS-25300:
   name: "R:RACING EVOLUTION"
@@ -60181,7 +60201,7 @@ SLPS-25456:
 SLPS-25457:
   name: "ポンコツ浪漫大活劇バンピートロット"
   name-sort: "ぽんこつろまんだいかつげきばんぴーとろっと"
-  name-en: "Ponkotsu Roeman Daikatsugeki Bumpy Trot"
+  name-en: "Ponkotsu Roman Daikatsugeki Bumpy Trot"
   region: "NTSC-J"
   roundModes:
     eeRoundMode: 0 # Fixes broken load triggers.
@@ -61297,6 +61317,7 @@ SLPS-25640:
     nativeScaling: 2 # Fixes lighting smoothness.
     textureInsideRT: 1 # Fixes broken crystalline surface textures.
     bilinearUpscale: 2 # Fixes off axis texture corruption in some areas.
+    targetPageRearranging: 1 # Fixes issues with transitions reusing targets.
   memcardFilters: # Allows import of Xenosaga II save data.
     - "SLPS-25640"
     - "SLPS-25368"
@@ -61312,6 +61333,7 @@ SLPS-25641:
     nativeScaling: 2 # Fixes lighting smoothness.
     textureInsideRT: 1 # Fixes broken crystalline surface textures.
     bilinearUpscale: 2 # Fixes off axis texture corruption in some areas.
+    targetPageRearranging: 1 # Fixes issues with transitions reusing targets.
   memcardFilters:
     - "SLPS-25640"
     - "SLPS-25368"
@@ -61672,7 +61694,7 @@ SLPS-25691:
 SLPS-25693:
   name: "プリンセス・プリンセス 姫たちのアブナい放課後 [初回限定版]"
   name-sort: "ぷりんせすぷりんせす ひめたちのあぶないほうかご [しょかいげんていばん]"
-  name-en: "Shinseiki GPX - Road to the Infinity 3 [First Limited Edition]"
+  name-en: "Princess Princess [First Limited Edition]"
   region: "NTSC-J"
 SLPS-25694:
   name: "プリンセス・プリンセス 姫たちのアブナい放課後 [通常版]"
@@ -64950,7 +64972,7 @@ SLUS-20130:
   region: "NTSC-U"
   compat: 5
   gsHWFixes:
-    getSkipCount: "GSC_SFEX3"
+    targetPageRearranging: 1 # Fixes overlay on bottom of screen.
     halfPixelOffset: 4 # Aligns post effects.
 SLUS-20131:
   name: "Dark Angel - Vampire Apocalypse"
@@ -65925,7 +65947,7 @@ SLUS-20333:
   gsHWFixes:
     halfPixelOffset: 2 # Fixes depth/fog lines.
     textureInsideRT: 1 # Fixes underwater levels.
-    getSkipCount: "GSC_Turok"
+    targetPageRearranging: 1 # Fixes rearranged clear problems introduced with Tex in RT.
 SLUS-20334:
   name: "Kelly Slater's Pro Surfer"
   region: "NTSC-U"
@@ -68105,6 +68127,8 @@ SLUS-20737:
   name: "Hot Wheels - World Race"
   region: "NTSC-U"
   compat: 5
+  gsHWFixes:
+    targetPageRearranging: 1 # Fixes top of screen corruption due to game bug.
 SLUS-20738:
   name: "Van Helsing"
   region: "NTSC-U"
@@ -68907,6 +68931,7 @@ SLUS-20885:
   compat: 5
   gsHWFixes:
     halfPixelOffset: 5 # Fixes depth line and edge garbage.
+    nativeScaling: 4 # Softens and aligns bloom.
 SLUS-20886:
   name: "Sitting Ducks"
   region: "NTSC-U"
@@ -69175,6 +69200,7 @@ SLUS-20929:
   gsHWFixes:
     halfPixelOffset: 4 # Improves clarity of the UI when upscaling.
     nativeScaling: 1 # Fixes post-processing and lighting smoothness and position.
+    targetPageRearranging: 1 # Fixes garbage on screen.
 SLUS-20930:
   name: "ChoroQ"
   region: "NTSC-U"
@@ -69190,6 +69216,7 @@ SLUS-20932:
   gsHWFixes:
     autoFlush: 2 # Fixes missing lighting.
     nativeScaling: 1 # Fixes post lighting.
+    textureInsideRT: 1 # Fixes binoculars.
     # halfPixelOffset: 1 # Fixes lighting misalignment. Do not enable this, it breaks a lot of graphics.
 SLUS-20933:
   name: "Smash Court Pro Tournament Tennis 2"
@@ -70727,6 +70754,8 @@ SLUS-21181:
   name: "D.I.C.E. - DNA Integrated Cybernetic Enterprises"
   region: "NTSC-U"
   compat: 5
+  gsHWFixes:
+    targetPageRearranging: 1 # Fixes some on-screen garbage.
 SLUS-21182:
   name: "TOCA Race Driver 3 - The Ultimate Racing Simulator"
   region: "NTSC-U"
@@ -71646,6 +71675,7 @@ SLUS-21306:
   compat: 5
   gsHWFixes:
     halfPixelOffset: 4 # Fixes alignment on fire effects.
+    nativeScaling: 2 # Softens and aligns bloom on fire effects.
 SLUS-21307:
   name: "Ice Age 2 - The Meltdown"
   region: "NTSC-U"
@@ -72263,6 +72293,7 @@ SLUS-21389:
     nativeScaling: 2 # Fixes lighting smoothness.
     textureInsideRT: 1 # Fixes broken crystalline surface textures.
     bilinearUpscale: 2 # Fixes off axis texture corruption in some areas.
+    targetPageRearranging: 1 # Fixes issues with transitions reusing targets.
   memcardFilters: # Allows import of Xenosaga II save data.
     - "SLUS-21389"
     - "SLUS-20892"
@@ -72432,6 +72463,7 @@ SLUS-21417:
     nativeScaling: 2 # Fixes lighting smoothness.
     textureInsideRT: 1 # Fixes broken crystalline surface textures.
     bilinearUpscale: 2 # Fixes off axis texture corruption in some areas.
+    targetPageRearranging: 1 # Fixes issues with transitions reusing targets.
   memcardFilters:
     - "SLUS-21389"
     - "SLUS-20892"
@@ -74439,6 +74471,9 @@ SLUS-21781:
   gsHWFixes:
     halfPixelOffset: 4 # Mostly aligns post-processing.
     nativeScaling: 1 # Fixes post-processing smoothness and position.
+    targetPageRearranging: 1 # Fixes half screen issues.
+    preloadFrameData: 1 # Makes button text visible.
+    bilinearUpscale: 2 # Fixes button images when upscaling.
 SLUS-21782:
   name: "Shin Megami Tensei - Persona 4"
   region: "NTSC-U"
@@ -75014,10 +75049,13 @@ SLUS-21898:
   name: "Band Hero"
   region: "NTSC-U"
   compat: 5
+  roundModes:
+    vu1RoundMode: 0 # Fixes VU size spam and potential graphical issues.
   gsHWFixes:
     autoFlush: 1 # Fixes character shadow misalignment.
     preloadFrameData: 1 # Fixes icons.
     halfPixelOffset: 4 # Aligns UI and other elements.
+    targetPageRearranging: 1 # Fixes some texture errors.
 SLUS-21899:
   name: "Silent Hill - Shattered Memories"
   region: "NTSC-U"
@@ -75982,6 +76020,7 @@ SLUS-29137:
   gsHWFixes:
     autoFlush: 2 # Fixes missing lighting.
     nativeScaling: 1 # Fixes post lighting.
+    textureInsideRT: 1 # Fixes binoculars.
     # halfPixelOffset: 1 # Fixes lighting misalignment. Do not enable this, it breaks a lot of graphics.
 SLUS-29138:
   name: "The Punisher [Demo]"
@@ -76430,6 +76469,7 @@ TCES-53247:
   gsHWFixes:
     roundSprite: 1 # Fixes misaligned text.
     autoFlush: 2 # Fixes sun luminosity.
+    nativeScaling: 2 # Helps align sun occasional.
 TCES-53286:
   name: "Jak X Beta Trial Code"
   region: "PAL-E"
