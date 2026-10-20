@@ -38,6 +38,33 @@ if(USE_LIBRASHADER)
 	endif()
 endif()
 
+# Memory card sync (pcsx2/SIO/Memcard/MemcardSync.h). emusync is a Rust library: a pinned commit is
+# fetched and built by cargo through emusync's own CMake module, which defines emusync::emusync and
+# sets EMUSYNC_FOUND. Optional: without cargo, rustc or the Rust target (or with USE_EMUSYNC off) the
+# feature compiles out. -DEMUSYNC_SOURCE_DIR=<checkout> builds from a local emusync checkout.
+# MSBuild builds take emusync from the deps package instead (common/vsprops/common.props).
+if(USE_EMUSYNC)
+	# A plain variable, not a cache entry: a cached pin keeps its first value in an existing build
+	# folder, so a bump would be silently ignored there.
+	set(EMUSYNC_PIN "1b6906b7948c29de5169f36ded6bffe4c06e4559")
+	find_program(EMUSYNC_CARGO cargo HINTS "$ENV{CARGO_HOME}/bin" "$ENV{HOME}/.cargo/bin" "$ENV{USERPROFILE}/.cargo/bin")
+	if(NOT EMUSYNC_CARGO)
+		message(STATUS "emusync: cargo not found -> memory card sync DISABLED. Install Rust (https://rustup.rs) to enable it.")
+	else()
+		if(NOT EMUSYNC_SOURCE_DIR)
+			include(FetchContent)
+			FetchContent_Declare(emusync
+				GIT_REPOSITORY https://github.com/ilyalissoboi/emusync.git
+				GIT_TAG ${EMUSYNC_PIN}
+			)
+			# emusync has no top-level CMakeLists.txt, so this only downloads it.
+			FetchContent_MakeAvailable(emusync)
+			set(EMUSYNC_SOURCE_DIR "${emusync_SOURCE_DIR}")
+		endif()
+		include("${EMUSYNC_SOURCE_DIR}/bindings/cmake/EmuSync.cmake")
+	endif()
+endif()
+
 # Platform-specific dependencies.
 if (WIN32)
 	add_subdirectory(3rdparty/D3D12MemAlloc EXCLUDE_FROM_ALL)
