@@ -124,6 +124,7 @@ set(pcsx2Sources
 	SIO/Sio2.cpp
 	SIO/Sio0.cpp
 	SIO/Multitap/MultitapProtocol.cpp
+	SIO/Memcard/MemcardSync.cpp
 	SIO/Memcard/MemoryCardFile.cpp
 	SIO/Memcard/MemoryCardFolder.cpp
 	SIO/Memcard/MemoryCardProtocol.cpp
@@ -202,6 +203,7 @@ set(pcsx2Headers
 	SIO/Sio0.h
 	SIO/SioTypes.h
 	SIO/Multitap/MultitapProtocol.h
+	SIO/Memcard/MemcardSync.h
 	SIO/Memcard/MemoryCardFile.h
 	SIO/Memcard/MemoryCardFolder.h
 	SIO/Memcard/MemoryCardProtocol.h
@@ -677,6 +679,12 @@ target_include_directories(PCSX2_FLAGS INTERFACE ${CMAKE_SOURCE_DIR}/3rdparty/li
 
 if(USE_LIBRASHADER)
 	target_compile_definitions(PCSX2_FLAGS INTERFACE PCSX2_HAS_LIBRASHADER=1)
+endif()
+
+# Memory card sync with emusync (SIO/Memcard/MemcardSync.h; found in cmake/SearchForStuff.cmake).
+if(EMUSYNC_FOUND)
+	target_link_libraries(PCSX2_FLAGS INTERFACE emusync::emusync)
+	target_compile_definitions(PCSX2_FLAGS INTERFACE PCSX2_HAS_EMUSYNC)
 endif()
 
 set(pcsx2GSMetalShaders
@@ -1346,6 +1354,10 @@ function(setup_main_executable target)
 		foreach(DEP_TO_COPY ${DEPS_TO_COPY})
 			install(FILES "${DEPS_BINDIR}/${DEP_TO_COPY}" DESTINATION "${CMAKE_SOURCE_DIR}/bin")
 		endforeach()
+		# emusync is built by cargo, not taken from deps (cmake/SearchForStuff.cmake).
+		if(EMUSYNC_FOUND)
+			install(FILES "${EMUSYNC_LIBRARY}" DESTINATION "${CMAKE_SOURCE_DIR}/bin")
+		endif()
 
 		file(GLOB OPT_DEPS_FULL_PATHS
 			"${DEPS_BINDIR}/avcodec-*.dll"
@@ -1467,6 +1479,14 @@ function(setup_main_executable target)
 			message(STATUS "Using librashader from ${LIBRASHADER_LIBRARY}")
 		endif()
 
+		# emusync is linked (install name @rpath/libemusync.dylib): copy it into the bundle's
+		# Frameworks after each build, and look for it there. Needs testing on macOS.
+		if(EMUSYNC_FOUND)
+			emusync_deploy_runtime(${target} DESTINATION "$<TARGET_BUNDLE_CONTENT_DIR:${target}>/Frameworks")
+			set_property(TARGET ${target} APPEND PROPERTY BUILD_RPATH "@executable_path/../Frameworks")
+			set_property(TARGET ${target} APPEND PROPERTY INSTALL_RPATH "@executable_path/../Frameworks")
+		endif()
+
 		# If they say to skip postprocess bundle, leave the target in but make it so they have
 		# to manually run it
 		if (SKIP_POSTPROCESS_BUNDLE)
@@ -1479,6 +1499,12 @@ function(setup_main_executable target)
 			COMMAND Qt6::macdeployqt "$<TARGET_FILE_DIR:${target}>/../.." -no-strip
 		)
 		add_dependencies(pcsx2-postprocess-bundle ${target})
+	endif()
+
+	# emusync next to the executable on Windows and Linux (an $ORIGIN rpath on Linux), so builds run
+	# from the build folder.
+	if(EMUSYNC_FOUND AND NOT APPLE)
+		emusync_deploy_runtime(${target})
 	endif()
 
 	if(ENABLE_SETCAP AND UNIX AND NOT APPLE)

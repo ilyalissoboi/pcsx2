@@ -27,6 +27,7 @@ endif()
 if(WIN32 OR APPLE)
 	option(USE_LIBRASHADER "Enable librashader post-processing shader chain (library loaded at runtime)" ON)
 endif()
+option(USE_EMUSYNC "Enable memory card sync with emusync (built with cargo; off without a Rust toolchain)" ON)
 
 #-------------------------------------------------------------------------------
 # Path and lib option
