@@ -21,6 +21,7 @@
 #include "Settings/HotkeySettingsWidget.h"
 #include "Settings/InterfaceSettingsWidget.h"
 #include "Settings/MemoryCardSettingsWidget.h"
+#include "Settings/MemoryCardSyncSettingsWidget.h"
 #include "Settings/DebugSettingsWidget.h"
 #include "SettingsWindow.h"
 
@@ -169,6 +170,15 @@ void SettingsWindow::setupUi(const GameList::Entry* game)
 		QStringLiteral("memcard-line"),
 		tr("<strong>Memory Card Settings</strong><hr>Create and configure Memory Cards here.<br><br>Mouse over an option for "
 		   "additional information, and Shift+Wheel to scroll this panel."));
+
+	// The storage and its keys belong to the computer, not to a game: global settings only.
+	if (!isPerGameSettings())
+	{
+		addWidget(new MemoryCardSyncSettingsWidget(this, m_ui.settingsContainer), tr("Memory Card Sync"),
+			QStringLiteral("refresh-line"),
+			tr("<strong>Memory Card Sync Settings</strong><hr>Keep the saves on your memory cards in step with your other "
+			   "devices, through cloud storage you own.<br><br>Mouse over an option for additional information."));
+	}
 
 	addWidget(m_dev9_settings = new DEV9SettingsWidget(this, m_ui.settingsContainer), tr("Network & HDD"), QStringLiteral("global-line"),
 		tr("<strong>Network & HDD Settings</strong><hr>These options control the network connectivity and internal HDD storage of the "

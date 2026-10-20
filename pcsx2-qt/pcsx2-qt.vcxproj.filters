@@ -142,6 +142,9 @@
     <ClCompile Include="Settings\FolderSettingsWidget.cpp">
       <Filter>Settings</Filter>
     </ClCompile>
+    <ClCompile Include="Settings\MemoryCardSyncSettingsWidget.cpp">
+      <Filter>Settings</Filter>
+    </ClCompile>
     <ClCompile Include="CoverDownloadDialog.cpp" />
     <ClCompile Include="ShaderFavoritesDialog.cpp" />
     <ClCompile Include="ShaderPackDownloadDialog.cpp" />
@@ -401,6 +404,9 @@
       <Filter>Tools\Input Recording</Filter>
     </QtMoc>
     <QtMoc Include="Settings\FolderSettingsWidget.h">
+      <Filter>Settings</Filter>
+    </QtMoc>
+    <QtMoc Include="Settings\MemoryCardSyncSettingsWidget.h">
       <Filter>Settings</Filter>
     </QtMoc>
     <QtMoc Include="QtHost.h" />
@@ -673,6 +679,9 @@
       <Filter>Settings</Filter>
     </QtUi>
     <QtUi Include="Settings\FolderSettingsWidget.ui">
+      <Filter>Settings</Filter>
+    </QtUi>
+    <QtUi Include="Settings\MemoryCardSyncSettingsWidget.ui">
       <Filter>Settings</Filter>
     </QtUi>
     <QtUi Include="Settings\GameCheatSettingsWidget.ui">
