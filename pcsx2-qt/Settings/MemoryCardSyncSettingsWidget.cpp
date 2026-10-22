@@ -41,10 +41,10 @@ MemoryCardSyncSettingsWidget::MemoryCardSyncSettingsWidget(SettingsWindow* setti
 	connect(m_ui.passphraseShow, &QPushButton::toggled, this, [this](bool shown) {
 		onShowToggled(m_ui.passphrase, m_ui.passphraseShow, MemcardSync::ENCRYPTION_PASSPHRASE, shown);
 	});
-	// Show leaves the focus in its field: taking it would finish the edit, which saves what was typed
-	// and empties the field, so there would be nothing left to show.
-	m_ui.secretShow->setFocusPolicy(Qt::NoFocus);
-	m_ui.passphraseShow->setFocusPolicy(Qt::NoFocus);
+	// Clicking Show leaves the focus in its field: taking it would finish the edit, which saves what
+	// was typed and empties the field, so there would be nothing left to show. Tab still reaches it.
+	m_ui.secretShow->setFocusPolicy(Qt::TabFocus);
+	m_ui.passphraseShow->setFocusPolicy(Qt::TabFocus);
 	connect(m_ui.passphraseRemove, &QPushButton::clicked, this, &MemoryCardSyncSettingsWidget::onPassphraseRemoveClicked);
 	connect(m_ui.syncNow, &QPushButton::clicked, this, &MemoryCardSyncSettingsWidget::onSyncNowClicked);
 
@@ -154,8 +154,10 @@ void MemoryCardSyncSettingsWidget::onShowToggled(QLineEdit* edit, QPushButton* s
 		return;
 	}
 	// Show unmasks what is being typed; with nothing typed, it loads the stored secret, e.g. to set
-	// up another device with it (and losing the passphrase loses the saves).
-	if (!edit->text().isEmpty() || !MemcardSync::HasSecret(secret))
+	// up another device with it (and losing the passphrase loses the saves). While settings apply,
+	// e.g. a value just saved by tabbing to Show, the store may not have it yet: apply() shows it
+	// once they are applied.
+	if (!edit->text().isEmpty() || m_starting || !MemcardSync::HasSecret(secret))
 		return;
 
 	// Reading the credential store can block (an unlock prompt), so not on the UI thread.
@@ -214,6 +216,11 @@ void MemoryCardSyncSettingsWidget::apply(std::vector<std::pair<const char*, std:
 			widget->m_starting = false;
 			widget->updateSecretPlaceholders();
 			widget->updateStatus();
+			// A Show pressed while they applied.
+			if (widget->m_ui.secretShow->isChecked())
+				widget->onShowToggled(widget->m_ui.secret, widget->m_ui.secretShow, MemcardSync::SECRET_ACCESS_KEY, true);
+			if (widget->m_ui.passphraseShow->isChecked())
+				widget->onShowToggled(widget->m_ui.passphrase, widget->m_ui.passphraseShow, MemcardSync::ENCRYPTION_PASSPHRASE, true);
 		});
 	});
 }
