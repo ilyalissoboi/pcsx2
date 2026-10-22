@@ -40,11 +40,14 @@ private:
 
 	/// Restarts sync with the stored settings, storing `secrets` first (off the UI thread).
 	void apply(std::vector<std::pair<const char*, std::string>> secrets = {});
+	/// An apply() is done.
+	void onApplied();
 	void updateEnabledState();
 	void updateSecretPlaceholders();
 	void updateStatus();
 
 	Ui::MemoryCardSyncSettingsWidget m_ui;
 	QTimer m_status_timer;
-	bool m_starting = false;
+	/// Settings changes still being applied: each apply() until its callback.
+	int m_pending_applies = 0;
 };

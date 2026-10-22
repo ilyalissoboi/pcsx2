@@ -157,7 +157,7 @@ void MemoryCardSyncSettingsWidget::onShowToggled(QLineEdit* edit, QPushButton* s
 	// up another device with it (and losing the passphrase loses the saves). While settings apply,
 	// e.g. a value just saved by tabbing to Show, the store may not have it yet: apply() shows it
 	// once they are applied.
-	if (!edit->text().isEmpty() || m_starting || !MemcardSync::HasSecret(secret))
+	if (!edit->text().isEmpty() || m_pending_applies > 0 || !MemcardSync::HasSecret(secret))
 		return;
 
 	// Reading the credential store can block (an unlock prompt), so not on the UI thread.
@@ -207,22 +207,30 @@ void MemoryCardSyncSettingsWidget::apply(std::vector<std::pair<const char*, std:
 	std::vector<MemcardSync::SecretUpdate> updates;
 	for (auto& [name, value] : secrets)
 		updates.push_back({name, std::move(value)});
-	m_starting = true;
+	m_pending_applies++;
 	updateStatus();
 	MemcardSync::ApplySettingsAsync(std::move(updates), [widget = QPointer<MemoryCardSyncSettingsWidget>(this)](const std::string&) {
 		QtHost::RunOnUIThread([widget]() {
-			if (!widget)
-				return;
-			widget->m_starting = false;
-			widget->updateSecretPlaceholders();
-			widget->updateStatus();
-			// A Show pressed while they applied.
-			if (widget->m_ui.secretShow->isChecked())
-				widget->onShowToggled(widget->m_ui.secret, widget->m_ui.secretShow, MemcardSync::SECRET_ACCESS_KEY, true);
-			if (widget->m_ui.passphraseShow->isChecked())
-				widget->onShowToggled(widget->m_ui.passphrase, widget->m_ui.passphraseShow, MemcardSync::ENCRYPTION_PASSPHRASE, true);
+			if (widget)
+				widget->onApplied();
 		});
 	});
+}
+
+void MemoryCardSyncSettingsWidget::onApplied()
+{
+	m_pending_applies--;
+	updateSecretPlaceholders();
+	updateStatus();
+	// Only once every queued change is in: an earlier one finishing doesn't mean a secret saved
+	// since is stored yet.
+	if (m_pending_applies > 0)
+		return;
+	// A Show pressed while they applied.
+	if (m_ui.secretShow->isChecked())
+		onShowToggled(m_ui.secret, m_ui.secretShow, MemcardSync::SECRET_ACCESS_KEY, true);
+	if (m_ui.passphraseShow->isChecked())
+		onShowToggled(m_ui.passphrase, m_ui.passphraseShow, MemcardSync::ENCRYPTION_PASSPHRASE, true);
 }
 
 void MemoryCardSyncSettingsWidget::updateEnabledState()
@@ -251,7 +259,7 @@ void MemoryCardSyncSettingsWidget::updateStatus()
 	QString text;
 	if (!MemcardSync::IsAvailable())
 		text = tr("This build of PCSX2 has no memory card sync.");
-	else if (m_starting)
+	else if (m_pending_applies > 0)
 		text = tr("Connecting to the storage...");
 	else if (const std::string error = MemcardSync::GetLastStartError(); !error.empty())
 		text = QString::fromStdString(error);
@@ -264,7 +272,7 @@ void MemoryCardSyncSettingsWidget::updateStatus()
 	else
 		text = tr("Syncing. Nothing has changed yet.");
 	m_ui.status->setText(text);
-	m_ui.syncNow->setEnabled(MemcardSync::IsAvailable() && MemcardSync::IsRunning() && !m_starting);
+	m_ui.syncNow->setEnabled(MemcardSync::IsAvailable() && MemcardSync::IsRunning() && m_pending_applies == 0);
 }
 
 #include "moc_MemoryCardSyncSettingsWidget.cpp"
