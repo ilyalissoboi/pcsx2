@@ -46,7 +46,16 @@ endif()
 if(USE_EMUSYNC)
 	# A plain variable, not a cache entry: a cached pin keeps its first value in an existing build
 	# folder, so a bump would be silently ignored there.
-	set(EMUSYNC_PIN "1b6906b7948c29de5169f36ded6bffe4c06e4559")
+	set(EMUSYNC_PIN "760171a04a2ccc9a762279c534b083327d6e8fdb")
+	# emusync's module caches EMUSYNC_SOURCE_DIR. A cached folder inside this build folder is an
+	# earlier fetch, not a checkout given with -D: forget it, or a bump would keep the old source.
+	if(DEFINED CACHE{EMUSYNC_SOURCE_DIR})
+		get_filename_component(_emusync_cached "$CACHE{EMUSYNC_SOURCE_DIR}" ABSOLUTE)
+		string(FIND "${_emusync_cached}/" "${CMAKE_BINARY_DIR}/" _emusync_in_build)
+		if(_emusync_in_build EQUAL 0)
+			unset(EMUSYNC_SOURCE_DIR CACHE)
+		endif()
+	endif()
 	find_program(EMUSYNC_CARGO cargo HINTS "$ENV{CARGO_HOME}/bin" "$ENV{HOME}/.cargo/bin" "$ENV{USERPROFILE}/.cargo/bin")
 	if(NOT EMUSYNC_CARGO)
 		message(STATUS "emusync: cargo not found -> memory card sync DISABLED. Install Rust (https://rustup.rs) to enable it.")
