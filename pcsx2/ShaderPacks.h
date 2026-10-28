@@ -34,6 +34,7 @@ namespace ShaderPacks
 		const char* github_repo; ///< "owner/name"
 		VersionSource version_source;
 		const char* branch; ///< BranchHead only
+		const char* asset_prefix; ///< LatestRelease only; asset names must start with this (may be null)
 		const char* asset_exclude; ///< LatestRelease only; assets whose name contains this are skipped (may be null)
 		u32 strip_components; ///< leading path components removed from every archive entry
 		const char* install_subdir; ///< relative to the Shaders folder, '/' separators
@@ -71,9 +72,9 @@ namespace ShaderPacks
 	/// Parses a GitHub commits/<ref> response; sha receives the full commit hash.
 	bool ParseCommitJson(std::string_view json, std::string* sha, Error* error);
 
-	/// Parses a GitHub releases/latest response; picks the first asset ending in ".zip" whose name does
-	/// not contain asset_exclude (if non-null).
-	bool ParseReleaseJson(std::string_view json, const char* asset_exclude, ResolvedVersion* out, Error* error);
+	/// Parses a GitHub releases/latest response; picks the first .zip asset whose name starts with
+	/// asset_prefix and does not contain asset_exclude (each filter may be null).
+	bool ParseReleaseJson(std::string_view json, const char* asset_prefix, const char* asset_exclude, ResolvedVersion* out, Error* error);
 
 	/// GitHub API URL that yields the pack's current version.
 	std::string GetVersionUrl(const PackInfo& pack);
