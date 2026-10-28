@@ -247,6 +247,8 @@ QVariant GameListModel::data(const QModelIndex& index, const int role) const
 		return QVariant();
 	if (role == FavoriteRole)
 		return ge->is_favorite;
+	if (role == CustomSettingsRole)
+		return ge->has_custom_settings;
 
 	// See: https://doc.qt.io/qt-6/qt.html#ItemDataRole-enum
 	switch (role)
@@ -292,9 +294,17 @@ QVariant GameListModel::data(const QModelIndex& index, const int role) const
 			switch (index.column())
 			{
 				case Column_Title:
+				{
+					QPixmap title_decor = QPixmap(40, 20);
+					title_decor.fill(Qt::transparent);
+					QPainter painter(&title_decor);
 					if (ge->is_favorite)
-						return m_favorite_pixmap;
-					return QVariant();
+						painter.drawPixmap(0, 0, m_favorite_pixmap);
+					if (ge->has_custom_settings)
+						painter.drawPixmap(20, 0, m_custom_settings_pixmap);
+					painter.end();
+					return title_decor;
+				}
 
 				case Column_Type:
 					return m_type_pixmaps[static_cast<u32>(ge->type)];
@@ -381,7 +391,7 @@ void GameListModel::refresh()
 	endResetModel();
 }
 
-void GameListModel::refreshFavorite(const std::string& path)
+void GameListModel::refreshDecorations(const std::string& path)
 {
 	if (m_collapse_multi_disc)
 	{
@@ -565,6 +575,7 @@ void GameListModel::loadCommonImages()
 
 	const QString base_path(QtHost::GetResourcesBasePath());
 	m_favorite_pixmap = QIcon(QStringLiteral("%1/icons/star.svg").arg(base_path)).pixmap(QSize(20, 20), m_dpr);
+	m_custom_settings_pixmap = QIcon(QStringLiteral("%1/icons/gear.svg").arg(base_path)).pixmap(QSize(20, 20), m_dpr);
 
 	for (u32 rating = 1; rating < GameList::CompatibilityRatingCount; rating++)
 		m_compatibility_pixmaps[rating] = QIcon((QStringLiteral("%1/icons/star-%2.svg").arg(base_path).arg(rating - 1))).pixmap(QSize(88, 16), m_dpr);

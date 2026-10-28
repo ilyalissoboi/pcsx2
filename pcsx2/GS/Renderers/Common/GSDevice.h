@@ -66,6 +66,8 @@ enum class ShaderConvert
 	CLUT_4,
 	CLUT_8,
 	YUV,
+	GAUSSIAN_BLUR_H,
+	GAUSSIAN_BLUR_V,
 	Count
 };
 
@@ -131,6 +133,8 @@ static inline constexpr bool HasColorOutput(ShaderConvert shader)
 		case ShaderConvert::CLUT_8:
 		case ShaderConvert::YUV:
 		case ShaderConvert::COLCLIP_RESOLVE:
+		case ShaderConvert::GAUSSIAN_BLUR_H:
+		case ShaderConvert::GAUSSIAN_BLUR_V:
 			return true;
 		default:
 			return false;
@@ -1499,6 +1503,7 @@ protected:
 	GSTexture* m_target_tmp = nullptr;
 	GSTexture* m_current = nullptr;
 	GSTexture* m_cas = nullptr;
+	GSTexture* m_blur = nullptr;
 	GSTexture* m_colclip_rt = nullptr; ///< Temp hw colclip texture
 	GSTexture* m_ds_as_rt = nullptr; ///< Depth as color
 	GSTexture* m_ds_as_rt_orig = nullptr; ///< Where the depth as color came from
@@ -1508,6 +1513,8 @@ protected:
 	u64 m_shader_chain_frame_count = 0;
 	std::string m_shader_chain_preset_path; ///< Absolute path of the preset the backend should have loaded
 	bool m_shader_chain_failed_logged = false;
+
+	GSVector4 m_blur_source_rect = GSVector4::zero();
 
 	bool AcquireWindow(bool recreate_window);
 
@@ -1533,6 +1540,9 @@ protected:
 
 	/// Frees the backend chain object. Called on disable, preset change, and Destroy().
 	virtual void ReleaseShaderChain() {}
+
+	/// Applies Gaussian blur and writes to the destination texture.
+	void DoGaussianBlur(GSTexture* sTex, const GSVector4& sRect, GSTexture* dTex, GSTexture* tempTex);
 
 	/// Perform texture operations for ImGui
 	void UpdateImGuiTextures();
@@ -1741,6 +1751,7 @@ public:
 	void Resize(int width, int height);
 
 	void CAS(GSTexture*& tex, GSVector4i& src_rect, GSVector4& src_uv, const GSVector4& draw_rect, bool sharpen_only);
+	bool GaussianBlur(GSTexture*& tex, GSVector4& src_uv, const GSVector4& draw_rect, float scale, bool refresh);
 
 	/// Applies the librashader shader chain for presentation. On success, rewrites tex/src_rect/src_uv
 	/// to the chain output and returns true; the caller must then skip CAS and the TV shader.

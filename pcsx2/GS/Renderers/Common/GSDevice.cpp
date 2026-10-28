@@ -58,6 +58,8 @@ const char* ShaderEntryPoint(ShaderConvert value)
 		case ShaderConvert::CLUT_4:                 return "ps_convert_clut_4";
 		case ShaderConvert::CLUT_8:                 return "ps_convert_clut_8";
 		case ShaderConvert::YUV:                    return "ps_yuv";
+		case ShaderConvert::GAUSSIAN_BLUR_H:        return "ps_gaussian_blur_h";
+		case ShaderConvert::GAUSSIAN_BLUR_V:        return "ps_gaussian_blur_v";
 		// clang-format on
 		default:
 			pxAssert(0);
@@ -119,6 +121,8 @@ const char* ShaderConvertName(ShaderConvert shader)
 		ENTRY(CLUT_4);
 		ENTRY(CLUT_8);
 		ENTRY(YUV);
+		ENTRY(GAUSSIAN_BLUR_H);
+		ENTRY(GAUSSIAN_BLUR_V);
 		case ShaderConvert::Count: break;
 	}
 	#undef ENTRY
@@ -253,7 +257,7 @@ GSDevice::GSDevice()
 GSDevice::~GSDevice()
 {
 	// should've been cleaned up in Destroy()
-	pxAssert(m_pool[0].empty() && m_pool[1].empty() && !m_merge && !m_weavebob && !m_blend && !m_mad && !m_target_tmp && !m_cas);
+	pxAssert(m_pool[0].empty() && m_pool[1].empty() && !m_merge && !m_weavebob && !m_blend && !m_mad && !m_target_tmp && !m_cas && !m_blur);
 }
 
 const char* GSDevice::RenderAPIToString(RenderAPI api)
@@ -1012,6 +1016,7 @@ void GSDevice::ClearCurrent()
 	delete m_cas;
 	delete m_shader_chain_source;
 	delete m_shader_chain_target;
+	delete m_blur;
 
 	m_merge = nullptr;
 	m_weavebob = nullptr;
@@ -1021,6 +1026,7 @@ void GSDevice::ClearCurrent()
 	m_cas = nullptr;
 	m_shader_chain_source = nullptr;
 	m_shader_chain_target = nullptr;
+	m_blur = nullptr;
 }
 
 void GSDevice::Merge(GSTexture* sTex[3], GSVector4* sRect, GSVector4* dRect, const GSVector2i& fs, const GSRegPMODE& PMODE, const GSRegEXTBUF& EXTBUF, u32 c)
@@ -1470,6 +1476,43 @@ bool GSDevice::ApplyShaderChain(GSTexture*& tex, GSVector4i& src_rect, GSVector4
 
 	tex = m_shader_chain_target;
 	src_rect = GSVector4i(0, 0, out_w, out_h);
+	src_uv = GSVector4(0.0f, 0.0f, 1.0f, 1.0f);
+	return true;
+}
+
+void GSDevice::DoGaussianBlur(GSTexture* sTex, const GSVector4& sRect, GSTexture* dTex, GSTexture* tempTex)
+{
+	GL_PUSH("DoGaussianBlur");
+
+	const GSVector4 fullRect(0.0f, 0.0f, 1.0f, 1.0f);
+	const GSVector4 dRect(dTex->GetRect());
+	StretchRect(sTex, sRect, dTex, dRect, ShaderConvert::COPY, Biln);
+	StretchRect(dTex, fullRect, tempTex, dRect, ShaderConvert::GAUSSIAN_BLUR_H, Biln);
+	StretchRect(tempTex, fullRect, dTex, dRect, ShaderConvert::GAUSSIAN_BLUR_V, Biln);
+}
+
+bool GSDevice::GaussianBlur(GSTexture*& tex, GSVector4& src_uv, const GSVector4& draw_rect, float scale, bool refresh)
+{
+	const GSVector2i size(
+		std::max(1, static_cast<int>(std::round(std::abs(draw_rect.z - draw_rect.x) * scale))),
+		std::max(1, static_cast<int>(std::round(std::abs(draw_rect.w - draw_rect.y) * scale))));
+
+	if (refresh || !m_blur || m_blur->GetState() != GSTexture::State::Dirty || m_blur->GetSize() != size ||
+		!(src_uv == m_blur_source_rect).alltrue())
+	{
+		if (!ResizeRenderTarget(&m_blur, size.x, size.y, false, true))
+			return false;
+
+		GSTexture* const temp_tex = CreateRenderTarget(size, GSTexture::Format::Color, false);
+		if (!temp_tex)
+			return false;
+
+		DoGaussianBlur(tex, src_uv, m_blur, temp_tex);
+		Recycle(temp_tex);
+		m_blur_source_rect = src_uv;
+	}
+
+	tex = m_blur;
 	src_uv = GSVector4(0.0f, 0.0f, 1.0f, 1.0f);
 	return true;
 }

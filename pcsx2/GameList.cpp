@@ -1288,6 +1288,7 @@ bool GameList::AddFileFromCache(const std::string& path, std::time_t timestamp, 
 		entry.total_played_time = iter->second.total_played_time;
 	}
 	entry.is_favorite = custom_attributes_ini.GetBoolValue(EncodeIniKey(entry.path).c_str(), "Favorite", false);
+	entry.has_custom_settings = VMManager::AreGameSettingsPresent(entry.serial, entry.crc);
 
 	s_entries.push_back(std::move(entry));
 	s_disc_sets_dirty = true;
@@ -1343,6 +1344,7 @@ bool GameList::ScanFile(std::string path, std::time_t timestamp, std::unique_loc
 		}
 	}
 	entry.is_favorite = custom_attributes_ini.GetBoolValue(EncodeIniKey(entry.path).c_str(), "Favorite", false);
+	entry.has_custom_settings = VMManager::AreGameSettingsPresent(entry.serial, entry.crc);
 
 	lock.lock();
 
@@ -2095,6 +2097,22 @@ void GameList::SaveFavoriteForPath(const std::string& path, bool favorite)
 		}
 	}
 	Host::OnGameListFavoriteChanged(path);
+}
+
+void GameList::SetCustomSettingsForPath(const std::string& path, bool custom_settings)
+{
+	{
+		std::unique_lock lock(s_mutex);
+		for (Entry& entry : s_entries)
+		{
+			if (entry.path == path)
+			{
+				entry.has_custom_settings = custom_settings;
+				break;
+			}
+		}
+	}
+	Host::OnGameSettingsChanged(path);
 }
 
 std::string GameList::GetCustomTitleForPath(const std::string& path)

@@ -2918,6 +2918,7 @@ SCED-50133:
 SCED-50140:
   name: "Official PlayStation 2 Magazine Demo 5"
   region: "PAL-M5"
+  gsHWFixes: *gran-turismo-3-gs-fixes
 SCED-50141:
   name: "Official PlayStation 2 Magazine Demo 6"
   region: "PAL-M5"
@@ -14791,6 +14792,8 @@ SLES-50114:
 SLES-50115:
   name: "Tokyo Xtreme Racer"
   region: "PAL-E"
+  gsHWFixes:
+    halfPixelOffset: 5 # Fixes vertical lines.
 SLES-50118:
   name: "Tiger Woods PGA Tour 2001"
   region: "PAL-E"
@@ -22392,6 +22395,7 @@ SLES-53028:
     halfPixelOffset: 5 # Fixes alignment of shuffles and post-processing.
     autoFlush: 1 # Fixes sun intensity.
     textureInsideRT: 1 # Fixes post-processing.
+    targetPageRearranging: 1 # Fixes some post effects.
 SLES-53029:
   name: "Hitman - Blood Money"
   region: "PAL-F"
@@ -22402,6 +22406,7 @@ SLES-53029:
     halfPixelOffset: 5 # Fixes alignment of shuffles and post-processing.
     autoFlush: 1 # Fixes sun intensity.
     textureInsideRT: 1 # Fixes post-processing.
+    targetPageRearranging: 1 # Fixes some post effects.
 SLES-53030:
   name: "Hitman - Blood Money"
   region: "PAL-G"
@@ -22412,6 +22417,7 @@ SLES-53030:
     halfPixelOffset: 5 # Fixes alignment of shuffles and post-processing.
     autoFlush: 1 # Fixes sun intensity.
     textureInsideRT: 1 # Fixes post-processing.
+    targetPageRearranging: 1 # Fixes some post effects.
 SLES-53031:
   name: "Hitman - Blood Money"
   region: "PAL-I"
@@ -22422,6 +22428,7 @@ SLES-53031:
     halfPixelOffset: 5 # Fixes alignment of shuffles and post-processing.
     autoFlush: 1 # Fixes sun intensity.
     textureInsideRT: 1 # Fixes post-processing.
+    targetPageRearranging: 1 # Fixes some post effects.
 SLES-53032:
   name: "Hitman - Blood Money"
   region: "PAL-S"
@@ -22432,6 +22439,7 @@ SLES-53032:
     halfPixelOffset: 5 # Fixes alignment of shuffles and post-processing.
     autoFlush: 1 # Fixes sun intensity.
     textureInsideRT: 1 # Fixes post-processing.
+    targetPageRearranging: 1 # Fixes some post effects.
 SLES-53035:
   name: "Masters of the Universe - He-Man - Defender of Greyskull"
   region: "PAL-E"
@@ -30155,6 +30163,14 @@ SLES-55444:
   gsHWFixes:
     roundSprite: 2 # Fixes textboxes and character portraits.
     beforeDraw: "OI_ArTonelico2"
+  patches:
+    default:
+      content: |-
+        comment=Fixes music unexpected cut out during "Dual Talk" scenes.
+        author=Xiyan, Nebulas Astra
+        // In "Nearest" EE round mode, BGM fade need longer time to complete.
+        // So must extended hardcoded waiting time to keep state machine align.
+        patch=0,EE,0097FA74,word,00000021
 SLES-55448:
   name: "Indiana Jones and the Staff of Kings"
   region: "PAL-M5"
@@ -37297,6 +37313,8 @@ SLPM-61144:
   name-sort: "にんきょうでん とせいにんいちだいき [たいけんばん]"
   name-en: "Ninkyouden Toseinin Ichidaiki [Trial]"
   region: "NTSC-J"
+  gsHWFixes:
+    halfPixelOffset: 5 # Fixes vertical lines.
 SLPM-61146:
   name: "電撃PS2 / 電撃PlayStation D90"
   name-sort: "でんげき PS2 でんげきPlayStation D90"
@@ -49315,6 +49333,8 @@ SLPM-66274:
   name-sort: "にんきょうでん とせいにんいちだいき"
   name-en: "Ninkyouden Toseinin Ichidaiki"
   region: "NTSC-J"
+  gsHWFixes:
+    halfPixelOffset: 5 # Fixes vertical lines.
 SLPM-66275:
   discSet:
     id: SLPM-66275
@@ -63073,6 +63093,14 @@ SLPS-25819:
   gsHWFixes:
     roundSprite: 2 # Fixes textboxes and character portraits.
     beforeDraw: "OI_ArTonelico2"
+  patches:
+    default:
+      content: |-
+        comment=Fixes music unexpected cut out during "Dual Talk" scenes.
+        author=Xiyan, Nebulas Astra
+        // In "Nearest" EE round mode, BGM fade need longer time to complete.
+        // So must extended hardcoded waiting time to keep state machine align.
+        patch=0,EE,00988A9C,word,00000020
 SLPS-25820:
   name: "家庭教師ヒットマンREBORN！ Let's暗殺！? 狙われた10代目！"
   name-sort: "かてきょーひっとまんりぼーん！ れっつあんさつ！? ねらわれた10だいめ！"
@@ -64870,6 +64898,14 @@ SLPS-73263:
   gsHWFixes:
     roundSprite: 2 # Fixes textboxes and character portraits.
     beforeDraw: "OI_ArTonelico2"
+  patches:
+    default:
+      content: |-
+        comment=Fixes music unexpected cut out during "Dual Talk" scenes.
+        author=Xiyan, Nebulas Astra
+        // In "Nearest" EE round mode, BGM fade need longer time to complete.
+        // So must extended hardcoded waiting time to keep state machine align.
+        patch=0,EE,009890EC,word,00000020
 SLPS-73264:
   name: "涼宮ハルヒの戸惑 [PlayStation2 the Best]"
   name-sort: "すずみやはるひのとまどい [PlayStation2 the Best]"
@@ -71035,6 +71071,7 @@ SLUS-21108:
     halfPixelOffset: 5 # Fixes alignment of shuffles and post-processing.
     autoFlush: 1 # Fixes sun intensity.
     textureInsideRT: 1 # Fixes post-processing.
+    targetPageRearranging: 1 # Fixes some post effects.
 SLUS-21109:
   name: "Drive to Survive"
   region: "NTSC-U"
@@ -75243,6 +75280,14 @@ SLUS-21788:
   gsHWFixes:
     roundSprite: 2 # Fixes textboxes and character portraits.
     beforeDraw: "OI_ArTonelico2"
+  patches:
+    default:
+      content: |-
+        comment=Fixes music unexpected cut out during "Dual Talk" scenes.
+        author=Xiyan, Nebulas Astra
+        // In "Nearest" EE round mode, BGM fade need longer time to complete.
+        // So must extended hardcoded waiting time to keep state machine align.
+        patch=0,EE,0097EB94,word,00000020
 SLUS-21789:
   name: "Cabela's Legendary Adventures"
   region: "NTSC-U"
@@ -77040,6 +77085,7 @@ SLUS-29191:
     textureInsideRT: 1 # Fixes post-processing.
     autoFlush: 1 # Fixes sun intensity in Hitman.
     halfPixelOffset: 5 # Fixes alignment of shuffles and post-processing in Hitman.
+    targetPageRearranging: 1 # Fixes some post effects in Hitman.
 SLUS-29192:
   name: "Test Drive Unlimited [Public Beta Vol.1.0]"
   region: "NTSC-U"
