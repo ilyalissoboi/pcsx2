@@ -775,7 +775,7 @@ GraphicsSettingsWidget::GraphicsSettingsWidget(SettingsWindow* settings_dialog, 
 		dialog()->registerWidgetHelp(m_post.shaderChainUseGlobal, tr("Use Global Setting"), tr("N/A"),
 			tr("Drops this game's preset override and uses the global setting again."));
 		dialog()->registerWidgetHelp(m_post.shaderChainDownload, tr("Download Shader Packs"), tr("N/A"),
-			tr("Downloads the libretro slang shaders, the Retro Crisis GDV-NTSC presets and the satpixie CRT shader into the Shaders folder, "
+			tr("Downloads the libretro slang shaders, the Retro Crisis GDV-NTSC presets, and the satpixie and Lola Retro CRT shaders into the Shaders folder, "
 			   "and keeps them up to date."));
 		dialog()->registerWidgetHelp(m_post.shaderChainParameters, tr("Parameters"), tr("N/A"),
 			tr("Opens an editor for the selected preset's adjustable parameters. Changes apply immediately while a game is running and are "

@@ -39,10 +39,10 @@ namespace
 	};
 } // namespace
 
-TEST(ShaderPacks, RegistryHasThreePacksWithSpecLayout)
+TEST(ShaderPacks, RegistryHasFourPacksWithExpectedLayout)
 {
 	const auto packs = ShaderPacks::GetPacks();
-	ASSERT_EQ(packs.size(), 3u);
+	ASSERT_EQ(packs.size(), 4u);
 
 	const ShaderPacks::PackInfo* slang = ShaderPacks::FindPack("shaders_slang");
 	ASSERT_NE(slang, nullptr);
@@ -68,6 +68,17 @@ TEST(ShaderPacks, RegistryHasThreePacksWithSpecLayout)
 	EXPECT_EQ(sat->strip_components, 4u);
 	EXPECT_STREQ(sat->install_subdir, "shaders_slang");
 	EXPECT_EQ(sat->depends_on, nullptr);
+
+	const ShaderPacks::PackInfo* lola = ShaderPacks::FindPack("lola-retro");
+	ASSERT_NE(lola, nullptr);
+	EXPECT_STREQ(lola->github_repo, "zoran123456/lola-retro");
+	EXPECT_STREQ(lola->license, "MIT");
+	EXPECT_EQ(lola->version_source, ShaderPacks::VersionSource::LatestRelease);
+	EXPECT_STREQ(lola->asset_prefix, "lola-retro-v");
+	EXPECT_EQ(lola->asset_exclude, nullptr);
+	EXPECT_EQ(lola->strip_components, 1u);
+	EXPECT_STREQ(lola->install_subdir, "lola-retro");
+	EXPECT_EQ(lola->depends_on, nullptr);
 
 	EXPECT_EQ(ShaderPacks::FindPack("nope"), nullptr);
 }
@@ -142,35 +153,74 @@ TEST(ShaderPacks, ParseReleaseJsonPicksMatchingZipAsset)
 		]})";
 	ShaderPacks::ResolvedVersion out;
 	Error error;
-	ASSERT_TRUE(ShaderPacks::ParseReleaseJson(json, "variants", &out, &error)) << error.GetDescription();
+	ASSERT_TRUE(ShaderPacks::ParseReleaseJson(json, nullptr, "variants", &out, &error)) << error.GetDescription();
 	EXPECT_EQ(out.version, "20260122");
 	EXPECT_EQ(out.download_url, "https://x/main.zip");
 
 	// Without an exclusion the first .zip wins.
-	ASSERT_TRUE(ShaderPacks::ParseReleaseJson(json, nullptr, &out, &error));
+	ASSERT_TRUE(ShaderPacks::ParseReleaseJson(json, nullptr, nullptr, &out, &error));
 	EXPECT_EQ(out.download_url, "https://x/variants.zip");
 
 	// RetroCrisis publishes a doubled extension; it still ends in .zip.
 	const char* rc = R"({"tag_name":"20260820","assets":[{"name":"Retro.Crisis.GDV-NTSC.2026.08.20.zip.zip","browser_download_url":"https://x/rc.zip.zip"}]})";
-	ASSERT_TRUE(ShaderPacks::ParseReleaseJson(rc, nullptr, &out, &error));
+	ASSERT_TRUE(ShaderPacks::ParseReleaseJson(rc, nullptr, nullptr, &out, &error));
 	EXPECT_EQ(out.version, "20260820");
 	EXPECT_EQ(out.download_url, "https://x/rc.zip.zip");
+}
+
+TEST(ShaderPacks, ParseReleaseJsonSelectsLolaRetroSlangArchive)
+{
+	// The release lists the other platforms before the RetroArch slang archive.
+	const char* json = R"({
+		"tag_name": "v1.18",
+		"assets": [
+			{"name": "lola-retro-86box-v1.18.zip", "browser_download_url": "https://x/86box.zip"},
+			{"name": "lola-retro-amiberry-v1.18.zip", "browser_download_url": "https://x/amiberry.zip"},
+			{"name": "lola-retro-kodi-v1.18.zip", "browser_download_url": "https://x/kodi.zip"},
+			{"name": "lola-retro-v1.18.zip", "browser_download_url": "https://x/slang.zip"}
+		]})";
+	const ShaderPacks::PackInfo* pack = ShaderPacks::FindPack("lola-retro");
+	ASSERT_NE(pack, nullptr);
+	ShaderPacks::ResolvedVersion out;
+	Error error;
+	ASSERT_TRUE(ShaderPacks::ParseReleaseJson(json, pack->asset_prefix, pack->asset_exclude, &out, &error)) << error.GetDescription();
+	EXPECT_EQ(out.version, "v1.18");
+	EXPECT_EQ(out.download_url, "https://x/slang.zip");
+}
+
+TEST(ShaderPacks, ParseReleaseJsonRejectsLolaRetroReleaseWithoutSlangArchive)
+{
+	const char* json = R"({
+		"tag_name": "v1.18",
+		"assets": [
+			{"name": "lola-retro-86box-v1.18.zip", "browser_download_url": "https://x/86box.zip"},
+			{"name": "lola-retro-amiberry-v1.18.zip", "browser_download_url": "https://x/amiberry.zip"},
+			{"name": "lola-retro-kodi-v1.18.zip", "browser_download_url": "https://x/kodi.zip"},
+			{"name": "lola-retro-v1.18.zip.sha256", "browser_download_url": "https://x/hash"}
+		]})";
+	const ShaderPacks::PackInfo* pack = ShaderPacks::FindPack("lola-retro");
+	ASSERT_NE(pack, nullptr);
+	ShaderPacks::ResolvedVersion out;
+	Error error;
+	EXPECT_FALSE(ShaderPacks::ParseReleaseJson(json, pack->asset_prefix, pack->asset_exclude, &out, &error));
+	EXPECT_NE(error.GetDescription().find("no matching .zip asset"), std::string::npos);
 }
 
 TEST(ShaderPacks, ParseReleaseJsonErrors)
 {
 	ShaderPacks::ResolvedVersion out;
 	Error error;
-	EXPECT_FALSE(ShaderPacks::ParseReleaseJson("not json", nullptr, &out, &error));
-	EXPECT_FALSE(ShaderPacks::ParseReleaseJson(R"({"tag_name":"v1","assets":[{"name":"a.tar.gz","browser_download_url":"u"}]})", nullptr, &out, &error));
+	EXPECT_FALSE(ShaderPacks::ParseReleaseJson("not json", nullptr, nullptr, &out, &error));
+	EXPECT_FALSE(ShaderPacks::ParseReleaseJson(R"({"tag_name":"v1","assets":[{"name":"a.tar.gz","browser_download_url":"u"}]})", nullptr, nullptr, &out, &error));
 	EXPECT_NE(error.GetDescription().find("zip"), std::string::npos);
-	EXPECT_FALSE(ShaderPacks::ParseReleaseJson(R"({"assets":[{"name":"a.zip","browser_download_url":"u"}]})", nullptr, &out, &error)); // no tag_name
+	EXPECT_FALSE(ShaderPacks::ParseReleaseJson(R"({"assets":[{"name":"a.zip","browser_download_url":"u"}]})", nullptr, nullptr, &out, &error)); // no tag_name
 }
 
 TEST(ShaderPacks, VersionUrlsFollowGitHubApi)
 {
 	EXPECT_EQ(ShaderPacks::GetVersionUrl(*ShaderPacks::FindPack("shaders_slang")), "https://api.github.com/repos/libretro/slang-shaders/commits/master");
 	EXPECT_EQ(ShaderPacks::GetVersionUrl(*ShaderPacks::FindPack("satpixie-crt")), "https://api.github.com/repos/Conkwer/satpixie-crt-shader/releases/latest");
+	EXPECT_EQ(ShaderPacks::GetVersionUrl(*ShaderPacks::FindPack("lola-retro")), "https://api.github.com/repos/zoran123456/lola-retro/releases/latest");
 }
 
 namespace

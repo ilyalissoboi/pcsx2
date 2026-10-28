@@ -31,14 +31,17 @@ namespace
 {
 	constexpr ShaderPacks::PackInfo s_packs[] = {
 		{"shaders_slang", "libretro slang shaders", "The RetroArch slang shader collection (CRT, NTSC, scalers, and more). Required by the Retro Crisis presets.",
-			"Mixed per-shader licences, see each file", "libretro/slang-shaders", ShaderPacks::VersionSource::BranchHead, "master", nullptr, 1,
+			"Mixed per-shader licences, see each file", "libretro/slang-shaders", ShaderPacks::VersionSource::BranchHead, "master", nullptr, nullptr, 1,
 			"shaders_slang", nullptr},
 		{"retro-crisis-gdv-ntsc", "Retro Crisis GDV-NTSC presets", "CRT presets based on Guest Advanced NTSC, organised by display resolution.",
-			"GPL-3.0", "RetroCrisis/Retro-Crisis-GDV-NTSC", ShaderPacks::VersionSource::LatestRelease, nullptr, nullptr, 1,
+			"GPL-3.0", "RetroCrisis/Retro-Crisis-GDV-NTSC", ShaderPacks::VersionSource::LatestRelease, nullptr, nullptr, nullptr, 1,
 			"shaders_slang/retro crisis", "shaders_slang"},
 		{"satpixie-crt", "satpixie CRT shader", "A lightweight CRT shader with ghosting and chroma options.",
-			"See repository licence", "Conkwer/satpixie-crt-shader", ShaderPacks::VersionSource::LatestRelease, nullptr, "variants", 4,
+			"See repository licence", "Conkwer/satpixie-crt-shader", ShaderPacks::VersionSource::LatestRelease, nullptr, nullptr, "variants", 4,
 			"shaders_slang", nullptr},
+		{"lola-retro", "Lola Retro CRT shader", "An analog CRT simulation with curved, flat, lite, and HDR presets.",
+			"MIT", "zoran123456/lola-retro", ShaderPacks::VersionSource::LatestRelease, nullptr, "lola-retro-v", nullptr, 1,
+			"lola-retro", nullptr},
 	};
 
 	constexpr const char* MARKER_DIR = ".shaderpacks";
@@ -227,7 +230,7 @@ bool ShaderPacks::ParseCommitJson(std::string_view json, std::string* sha, Error
 	return true;
 }
 
-bool ShaderPacks::ParseReleaseJson(std::string_view json, const char* asset_exclude, ResolvedVersion* out, Error* error)
+bool ShaderPacks::ParseReleaseJson(std::string_view json, const char* asset_prefix, const char* asset_exclude, ResolvedVersion* out, Error* error)
 {
 	rapidjson::Document doc;
 	doc.Parse(json.data(), json.size());
@@ -256,6 +259,8 @@ bool ShaderPacks::ParseReleaseJson(std::string_view json, const char* asset_excl
 
 			const std::string_view name_sv(name->value.GetString(), name->value.GetStringLength());
 			if (!name_sv.ends_with(".zip"))
+				continue;
+			if (asset_prefix && !name_sv.starts_with(asset_prefix))
 				continue;
 			if (asset_exclude && name_sv.find(asset_exclude) != std::string_view::npos)
 				continue;
@@ -312,7 +317,7 @@ std::optional<ShaderPacks::ResolvedVersion> ShaderPacks::ResolveLatest(const Pac
 		out.version = sha.substr(0, 12);
 		out.download_url = fmt::format("https://github.com/{}/archive/{}.zip", pack.github_repo, sha);
 	}
-	else if (!ParseReleaseJson(body, pack.asset_exclude, &out, error))
+	else if (!ParseReleaseJson(body, pack.asset_prefix, pack.asset_exclude, &out, error))
 	{
 		return std::nullopt;
 	}
