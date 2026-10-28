@@ -268,10 +268,13 @@ QVariant GameListModel::data(const QModelIndex& index, const int role) const
 					return QString::fromStdString(fmt::format("{:08X}", ge->crc));
 
 				case Column_TimePlayed:
-					return ge->total_played_time ? formatTimespan(ge->total_played_time) : QVariant();
+				{
+					const auto history = GameList::GetDisplayPlayHistory(ge, m_collapse_multi_disc);
+					return history.total_played_time ? formatTimespan(history.total_played_time) : QVariant();
+				}
 
 				case Column_LastPlayed:
-					return QString::fromStdString(GameList::FormatTimestamp(ge->last_played_time));
+					return QString::fromStdString(GameList::FormatTimestamp(GameList::GetDisplayPlayHistory(ge, m_collapse_multi_disc).last_played_time));
 
 				case Column_Size:
 					return QString("%1 MB").arg(static_cast<double>(ge->total_size) / 1048576.0, 0, 'f', 2);
@@ -498,18 +501,22 @@ bool GameListModel::lessThan(const QModelIndex& left_index, const QModelIndex& r
 
 		case Column_TimePlayed:
 		{
-			if (left->total_played_time == right->total_played_time)
+			const auto left_history = GameList::GetDisplayPlayHistory(left, m_collapse_multi_disc);
+			const auto right_history = GameList::GetDisplayPlayHistory(right, m_collapse_multi_disc);
+			if (left_history.total_played_time == right_history.total_played_time)
 				return titlesLessThan(left_row, right_row);
 
-			return (left->total_played_time < right->total_played_time);
+			return left_history.total_played_time < right_history.total_played_time;
 		}
 
 		case Column_LastPlayed:
 		{
-			if (left->last_played_time == right->last_played_time)
+			const auto left_history = GameList::GetDisplayPlayHistory(left, m_collapse_multi_disc);
+			const auto right_history = GameList::GetDisplayPlayHistory(right, m_collapse_multi_disc);
+			if (left_history.last_played_time == right_history.last_played_time)
 				return titlesLessThan(left_row, right_row);
 
-			return (left->last_played_time < right->last_played_time);
+			return left_history.last_played_time < right_history.last_played_time;
 		}
 
 		default:

@@ -378,6 +378,24 @@ const GameList::Entry* GameList::DiscSet::GetRepresentative() const
 	return favorite != entries.end() ? *favorite : entries.front();
 }
 
+GameList::PlayHistory GameList::DiscSet::GetPlayHistory() const
+{
+	PlayHistory history;
+	std::unordered_map<std::string, std::time_t> serial_times;
+	for (const Entry* entry : entries)
+	{
+		history.last_played_time = std::max(history.last_played_time, entry->last_played_time);
+		const std::string key = entry->serial.empty() ? "path:" + entry->path : "serial:" + StringUtil::toUpper(entry->serial);
+		// Copies and discs sharing a serial read the same cumulative playtime record.
+		// Take its newest value once, rather than counting each image as a separate session.
+		auto& time = serial_times[key];
+		time = std::max(time, entry->total_played_time);
+	}
+	for (const auto& [serial, time] : serial_times)
+		history.total_played_time += time;
+	return history;
+}
+
 std::optional<u32> GameList::GetDiscNumberForEntry(const Entry* entry)
 {
 	if (entry->disc_set)
@@ -579,6 +597,36 @@ const std::string& GameList::GetDisplayTitle(const Entry* entry, bool collapse_d
 		}
 	}
 	return sort ? entry->GetTitleSort(force_en) : entry->GetTitle(force_en);
+}
+
+GameList::PlayHistory GameList::GetDisplayPlayHistory(const Entry* entry, bool collapse_discs)
+{
+	if (collapse_discs)
+	{
+		if (const DiscSet* set = GetDiscSetForEntry(entry))
+			return set->GetPlayHistory();
+	}
+	return {entry->last_played_time, entry->total_played_time};
+}
+
+void GameList::ClearPlayedTimeForEntry(const Entry* entry, bool collapse_discs)
+{
+	std::set<std::string> serials;
+	{
+		const auto lock = GetLock();
+		const DiscSet* set = collapse_discs ? GetDiscSetForEntry(entry) : nullptr;
+		if (set)
+		{
+			for (const Entry* disc : set->entries)
+				serials.insert(disc->serial);
+		}
+		else
+		{
+			serials.insert(entry->serial);
+		}
+	}
+	for (const std::string& serial : serials)
+		ClearPlayedTimeForSerial(serial);
 }
 
 const char* GameList::EntryTypeToString(EntryType type, bool translate)

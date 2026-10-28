@@ -108,6 +108,12 @@ namespace GameList
 		__fi bool IsDisc() const { return (type == EntryType::PS1Disc || type == EntryType::PS2Disc); }
 	};
 
+	struct PlayHistory
+	{
+		std::time_t last_played_time = 0;
+		std::time_t total_played_time = 0;
+	};
+
 	// Disc sets are a library view. Every disc retains its original boot and save-state identity.
 	struct DiscSet
 	{
@@ -117,6 +123,7 @@ namespace GameList
 		std::vector<const Entry*> entries;
 
 		const Entry* GetRepresentative() const;
+		PlayHistory GetPlayHistory() const;
 	};
 
 	/// Matches release-specific disc-set IDs, then title aliases and serial/CRC image candidates.
@@ -128,6 +135,10 @@ namespace GameList
 	/// Requires the game list lock. The returned set is valid until the next list mutation.
 	const DiscSet* GetDiscSetForEntry(const Entry* entry);
 	const std::string& GetDisplayTitle(const Entry* entry, bool collapse_discs, bool force_en = false, bool sort = false);
+	/// Requires the game list lock. Combines playtime once per serial for collapsed sets.
+	PlayHistory GetDisplayPlayHistory(const Entry* entry, bool collapse_discs);
+	/// Clears every member serial when collapsed. Acquires the game list lock internally.
+	void ClearPlayedTimeForEntry(const Entry* entry, bool collapse_discs);
 
 	const char* EntryTypeToString(EntryType type, bool translate);
 	const char* RegionToString(Region region, bool translate);

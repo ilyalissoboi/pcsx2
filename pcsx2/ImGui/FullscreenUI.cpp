@@ -494,6 +494,7 @@ void FullscreenUI::UpdateGameDetails(std::string path, std::string serial, std::
 	s_current_disc_serial = std::move(serial);
 	s_current_disc_path = std::move(path);
 	s_current_disc_crc = disc_crc;
+	s_game_list_needs_sort = true;
 }
 
 void FullscreenUI::PauseForMenuOpen(bool set_pause_menu_open)
@@ -2581,19 +2582,23 @@ void FullscreenUI::PopulateGameListEntryList()
 
 				case 5: // Time Played
 				{
-					if (lhs->total_played_time != rhs->total_played_time)
+					const auto lhs_history = GameList::GetDisplayPlayHistory(lhs, s_collapse_multi_disc_games);
+					const auto rhs_history = GameList::GetDisplayPlayHistory(rhs, s_collapse_multi_disc_games);
+					if (lhs_history.total_played_time != rhs_history.total_played_time)
 					{
-						return reverse ? (lhs->total_played_time > rhs->total_played_time) :
-										 (lhs->total_played_time < rhs->total_played_time);
+						return reverse ? (lhs_history.total_played_time > rhs_history.total_played_time) :
+					                     (lhs_history.total_played_time < rhs_history.total_played_time);
 					}
 				}
 				break;
 
 				case 6: // Last Played (reversed by default)
 				{
-					if (lhs->last_played_time != rhs->last_played_time)
+					const auto lhs_history = GameList::GetDisplayPlayHistory(lhs, s_collapse_multi_disc_games);
+					const auto rhs_history = GameList::GetDisplayPlayHistory(rhs, s_collapse_multi_disc_games);
+					if (lhs_history.last_played_time != rhs_history.last_played_time)
 					{
-						return reverse ? (lhs->last_played_time < rhs->last_played_time) : (lhs->last_played_time > rhs->last_played_time);
+						return reverse ? (lhs_history.last_played_time < rhs_history.last_played_time) : (lhs_history.last_played_time > rhs_history.last_played_time);
 					}
 				}
 				break;
@@ -2933,10 +2938,11 @@ void FullscreenUI::DrawGameList(const ImVec2& heading_size)
 			ImGui::Text(" (%s)", GameList::EntryCompatibilityRatingToString(selected_entry->compatibility_rating, true));
 
 			// play time
+			const auto history = GameList::GetDisplayPlayHistory(selected_entry, s_collapse_multi_disc_games);
 			ImGui::TextUnformatted(
-				SmallString::from_format(FSUI_FSTR("Time Played: {}"), GameList::FormatTimespan(selected_entry->total_played_time)));
+				SmallString::from_format(FSUI_FSTR("Time Played: {}"), GameList::FormatTimespan(history.total_played_time)));
 			ImGui::TextUnformatted(
-				SmallString::from_format(FSUI_FSTR("Last Played: {}"), GameList::FormatTimestamp(selected_entry->last_played_time)));
+				SmallString::from_format(FSUI_FSTR("Last Played: {}"), GameList::FormatTimestamp(history.last_played_time)));
 
 			// size
 			ImGui::TextUnformatted(
@@ -3152,14 +3158,15 @@ void FullscreenUI::HandleGameListOptions(const GameList::Entry* entry)
 		{FSUI_ICONSTR(ICON_FA_COMPACT_DISC, "Full Boot"), false},
 	};
 
-	const time_t entry_played_time = GameList::GetCachedPlayedTimeForSerial(entry->serial);
+	const time_t entry_played_time = GameList::GetDisplayPlayHistory(entry, s_collapse_multi_disc_games).total_played_time;
 	if (entry_played_time)
 		options.emplace_back(FSUI_ICONSTR(ICON_FA_STOPWATCH, "Reset Play Time"), false);
 	options.emplace_back(FSUI_ICONSTR(ICON_FA_SQUARE_XMARK, "Close Menu"), false);
 
 	OpenChoiceDialog(GameList::GetDisplayTitle(entry, s_collapse_multi_disc_games, s_prefer_english_titles).c_str(), false, std::move(options),
-		[entry_path = entry->path, entry_serial = entry->serial, entry_title = entry->title, entry_played_time,
-			is_favorite](s32 index, const std::string& title, bool checked) {
+		[entry_path = entry->path, entry_serial = entry->serial,
+			entry_title = GameList::GetDisplayTitle(entry, s_collapse_multi_disc_games, s_prefer_english_titles), entry_played_time,
+			entry_snapshot = *entry, collapse_discs = s_collapse_multi_disc_games, is_favorite](s32 index, const std::string& title, bool checked) {
 			switch (index)
 			{
 				case 0: // Open Game Properties
@@ -3202,24 +3209,28 @@ void FullscreenUI::HandleGameListOptions(const GameList::Entry* entry)
 					return;
 				}
 				case 7:
-					{
-						// Close Menu
-						if (!entry_played_time)
-							break;
+				{
+					// Close Menu
+					if (!entry_played_time)
+						break;
 
-						// Reset Play Time
-						OpenConfirmMessageDialog(FSUI_ICONSTR(ICON_FA_STOPWATCH, "Confirm Reset"),
-							fmt::format(FSUI_FSTR("Are you sure you want to reset the play time for '{}' ({})?\n\n"
-												  "Your current play time is {}.\n\nThis action cannot be undone."),
-											entry_title.empty() ? FSUI_STR("empty title") : entry_title,
-											entry_serial.empty() ? FSUI_STR("no serial") : entry_serial,
-											GameList::FormatTimespan(entry_played_time, true)),
-							[entry_serial](bool result) {
-								if (result)
-									GameList::ClearPlayedTimeForSerial(entry_serial);
-							}, false);
-					}
-					break;
+					// Reset Play Time
+					const std::string message = fmt::format(
+						FSUI_FSTR("Are you sure you want to reset the play time for '{}' ({})?\n\n"
+								  "Your current play time is {}.\n\nThis action cannot be undone."),
+						entry_title.empty() ? FSUI_STR("empty title") : entry_title,
+						entry_serial.empty() ? FSUI_STR("no serial") : entry_serial,
+						GameList::FormatTimespan(entry_played_time, true));
+					const auto on_confirm = [entry_snapshot, collapse_discs](bool result) {
+						if (result)
+						{
+							GameList::ClearPlayedTimeForEntry(&entry_snapshot, collapse_discs);
+							s_game_list_needs_sort = true;
+						}
+					};
+					OpenConfirmMessageDialog(FSUI_ICONSTR(ICON_FA_STOPWATCH, "Confirm Reset"), message, on_confirm, false);
+				}
+				break;
 				default: // Close Menu
 					break;
 			}

@@ -18,6 +18,72 @@ namespace
 	}
 } // namespace
 
+TEST(GameListDiscSets, HistoryIncludesNonRepresentativeDiscsAndUpdatesLive)
+{
+	std::vector entries = {
+		MakeDisc("Game Disc 1", "one.iso", GameList::Region::NTSC_U, "SLUS-12345"),
+		MakeDisc("Game Disc 2", "two.iso", GameList::Region::NTSC_U, "SLUS-12346"),
+	};
+	entries[1].last_played_time = 200;
+	entries[1].total_played_time = 60;
+	const auto sets = GameList::BuildDiscSets(entries);
+	ASSERT_EQ(sets.size(), 1u);
+	EXPECT_EQ(sets[0].GetRepresentative(), &entries[0]);
+	EXPECT_EQ(sets[0].GetPlayHistory().last_played_time, 200);
+	EXPECT_EQ(sets[0].GetPlayHistory().total_played_time, 60);
+
+	entries[0].last_played_time = 300;
+	entries[0].total_played_time = 120;
+	EXPECT_EQ(sets[0].GetPlayHistory().last_played_time, 300);
+	EXPECT_EQ(sets[0].GetPlayHistory().total_played_time, 180);
+}
+
+TEST(GameListDiscSets, HistoryCountsCopiesAndSharedSerialsOnce)
+{
+	std::vector entries = {
+		MakeDisc("Game Disc 1", "one.iso"),
+		MakeDisc("Game Disc 1", "one.chd", GameList::Region::NTSC_U, "slus-12345"),
+		MakeDisc("Game Disc 2", "two.iso"),
+		MakeDisc("Game Disc 3", "three.iso", GameList::Region::NTSC_U, "SLUS-12346"),
+	};
+	entries[0].last_played_time = 100;
+	entries[0].total_played_time = 120;
+	entries[1].last_played_time = 200;
+	entries[1].total_played_time = 180;
+	entries[2].last_played_time = 200;
+	entries[2].total_played_time = 180;
+	entries[3].last_played_time = 150;
+	entries[3].total_played_time = 60;
+	GameList::DiscSet set;
+	for (const auto& entry : entries)
+		set.entries.push_back(&entry);
+	EXPECT_EQ(set.GetPlayHistory().last_played_time, 200);
+	EXPECT_EQ(set.GetPlayHistory().total_played_time, 240);
+}
+
+TEST(GameListDiscSets, HistoryDistinguishesDiscsWithoutSerials)
+{
+	std::vector entries = {
+		MakeDisc("Game Disc 1", "one.iso", GameList::Region::NTSC_U, ""),
+		MakeDisc("Game Disc 2", "two.iso", GameList::Region::NTSC_U, ""),
+	};
+	entries[0].total_played_time = 60;
+	entries[1].total_played_time = 120;
+	GameList::DiscSet set;
+	set.entries = {&entries[0], &entries[1]};
+	EXPECT_EQ(set.GetPlayHistory().total_played_time, 180);
+}
+
+TEST(GameListDiscSets, UncollapsedHistoryUsesOnlyTheSelectedDisc)
+{
+	auto entry = MakeDisc("Game Disc 2", "two.iso");
+	entry.last_played_time = 200;
+	entry.total_played_time = 60;
+	const auto history = GameList::GetDisplayPlayHistory(&entry, false);
+	EXPECT_EQ(history.last_played_time, 200);
+	EXPECT_EQ(history.total_played_time, 60);
+}
+
 TEST(GameListDiscSets, CollapsesBothTitleFormatsAndSortsNumerically)
 {
 	const std::vector entries = {
