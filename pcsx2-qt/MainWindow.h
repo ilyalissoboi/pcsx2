@@ -302,8 +302,9 @@ private:
 
 	QString getDiscDevicePath(const QString& title);
 
+	std::optional<GameList::Entry> selectGameListDisc(const GameList::Entry& entry);
 	void startGameListEntry(
-		const GameList::Entry& entry, std::optional<s32> save_slot = std::nullopt, std::optional<bool> fast_boot = std::nullopt, bool load_backup = false);
+		const GameList::Entry& entry, std::optional<s32> save_slot = std::nullopt, std::optional<bool> fast_boot = std::nullopt, bool load_backup = false, bool disc_selected = false);
 	void setGameListEntryCoverImage(const GameList::Entry& entry);
 	void clearGameListEntryPlayTime(const GameList::Entry& entry, const time_t entry_played_time);
 	void goToWikiPage(const GameList::Entry& entry);

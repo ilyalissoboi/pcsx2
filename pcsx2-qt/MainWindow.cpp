@@ -1823,7 +1823,10 @@ void MainWindow::onGameListSelectionChanged()
 
 void MainWindow::onGameListEntryActivated()
 {
-	const std::optional<GameList::Entry> entry = m_game_list_widget->getSelectedEntry();
+	std::optional<GameList::Entry> entry = m_game_list_widget->getSelectedEntry();
+	if (!entry.has_value())
+		return;
+	entry = selectGameListDisc(*entry);
 	if (!entry.has_value())
 		return;
 
@@ -1852,7 +1855,7 @@ void MainWindow::onGameListEntryActivated()
 	}
 
 	// only resume if the option is enabled, and we have one for this game
-	startGameListEntry(*entry, resume.value() ? std::optional<s32>(-1) : std::optional<s32>(), std::nullopt);
+	startGameListEntry(*entry, resume.value() ? std::optional<s32>(-1) : std::optional<s32>(), std::nullopt, false, true);
 }
 
 void MainWindow::onGameListEntryContextMenuRequested(const QPoint& point)
@@ -1937,8 +1940,11 @@ void MainWindow::onGameListEntryContextMenuRequested(const QPoint& point)
 			{
 				action = menu.addAction(tr("Boot and Debug"));
 				connect(action, &QAction::triggered, [this, entry]() {
+					const auto disc = selectGameListDisc(*entry);
+					if (!disc)
+						return;
 					DebugInterface::setPauseOnEntry(true);
-					startGameListEntry(*entry);
+					startGameListEntry(*disc, std::nullopt, std::nullopt, false, true);
 					DebuggerWindow::getInstance()->show();
 				});
 			}
@@ -1950,7 +1956,10 @@ void MainWindow::onGameListEntryContextMenuRequested(const QPoint& point)
 		{
 			action = menu.addAction(tr("Change Disc"));
 			connect(action, &QAction::triggered, [this, entry]() {
-				g_emu_thread->changeDisc(CDVD_SourceType::Iso, QString::fromStdString(entry->path));
+				const auto disc = selectGameListDisc(*entry);
+				if (!disc)
+					return;
+				g_emu_thread->changeDisc(CDVD_SourceType::Iso, QString::fromStdString(disc->path));
 				switchToEmulationView();
 			});
 			QtUtils::MarkActionAsDefault(action);
@@ -2052,6 +2061,8 @@ void MainWindow::onStartFullscreenUITriggered()
 
 void MainWindow::onFullscreenUIStateChange(bool running)
 {
+	if (!running)
+		m_game_list_widget->refreshGridCovers();
 	m_ui.actionStartFullscreenUI->setText(running ? tr("Stop Big Picture Mode") : tr("Start Big Picture &Mode"));
 	m_ui.actionToolbarStartFullscreenUI->setText(running ? tr("Exit Big Picture", "In Toolbar") : tr("Big Picture", "In Toolbar"));
 }
@@ -3347,6 +3358,8 @@ SettingsWindow* MainWindow::getSettingsWindow()
 		m_settings_window = new SettingsWindow();
 		connect(m_settings_window->getInterfaceSettingsWidget(), &InterfaceSettingsWidget::themeChanged, this, &MainWindow::onThemeChanged);
 		connect(m_settings_window->getInterfaceSettingsWidget(), &InterfaceSettingsWidget::languageChanged, this, &MainWindow::onLanguageChanged);
+		connect(m_settings_window->getInterfaceSettingsWidget(), &InterfaceSettingsWidget::collapseMultiDiscChanged,
+			m_game_list_widget, &GameListWidget::refreshGridCovers);
 		connect(m_settings_window->getInterfaceSettingsWidget(), &InterfaceSettingsWidget::backgroundChanged, m_game_list_widget, [this] { m_game_list_widget->setCustomBackground(); });
 		connect(m_settings_window->getInterfaceSettingsWidget(), &InterfaceSettingsWidget::preferEnglishGameListChanged, this, [] {
 			g_main_window->m_game_list_widget->refreshGridCovers();
@@ -3487,8 +3500,51 @@ QString MainWindow::getDiscDevicePath(const QString& title)
 	return ret;
 }
 
-void MainWindow::startGameListEntry(const GameList::Entry& entry, std::optional<s32> save_slot, std::optional<bool> fast_boot, bool load_backup)
+std::optional<GameList::Entry> MainWindow::selectGameListDisc(const GameList::Entry& entry)
 {
+	if (!Host::GetBaseBoolSettingValue("UI", "CollapseMultiDiscGames", false))
+		return entry;
+
+	std::vector<GameList::Entry> discs;
+	{
+		const auto lock = GameList::GetLock();
+		const GameList::DiscSet* set = GameList::GetDiscSetForEntry(&entry);
+		if (!set)
+			return entry;
+		for (const GameList::Entry* disc : set->entries)
+			discs.push_back(*disc);
+	}
+
+	// Copy entries before entering a modal event loop: a background scan may replace the list.
+	QStringList options;
+	const bool prefer_english = Host::GetBaseBoolSettingValue("UI", "PreferEnglishGameList", false);
+	for (const GameList::Entry& disc : discs)
+	{
+		QString title = QString::fromStdString(disc.GetTitle(prefer_english));
+		if (const auto number = GameList::GetDiscNumberForEntry(&disc))
+			title = tr("Disc %1: %2").arg(*number).arg(title);
+		options.append(tr("%1 [%2] - %3").arg(title, QString::fromStdString(disc.serial), QDir::toNativeSeparators(QString::fromStdString(disc.path))));
+	}
+	bool accepted = false;
+	const QString selected = QInputDialog::getItem(this, tr("Select Disc"), tr("Which disc would you like to boot?"),
+		options, 0, false, &accepted);
+	const qsizetype index = options.indexOf(selected);
+	if (!accepted || index < 0)
+		return std::nullopt;
+	return discs[static_cast<size_t>(index)];
+}
+
+void MainWindow::startGameListEntry(const GameList::Entry& entry, std::optional<s32> save_slot, std::optional<bool> fast_boot,
+	bool load_backup, bool disc_selected)
+{
+	// Explicit save-state actions already identify a disc by serial and CRC.
+	if (!disc_selected && !save_slot.has_value())
+	{
+		const auto disc = selectGameListDisc(entry);
+		if (disc)
+			startGameListEntry(*disc, save_slot, fast_boot, load_backup, true);
+		return;
+	}
 	std::shared_ptr<VMBootParameters> params = std::make_shared<VMBootParameters>();
 	params->fast_boot = fast_boot;
 
