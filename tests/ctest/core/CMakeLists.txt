@@ -1,4 +1,6 @@
 add_pcsx2_test(core_test
+	game_list_tests.cpp
+	game_list_database_tests.cpp
 	patch_tests.cpp
 	shader_presets_tests.cpp
 	shader_chain_params_tests.cpp
@@ -7,6 +9,10 @@ add_pcsx2_test(core_test
 	shader_pack_archive_tests.cpp
 	MockMemoryInterface.h
 	StubHost.cpp
+)
+
+target_compile_definitions(core_test PRIVATE
+	GAME_LIST_TEST_DATABASE_PATH="${PROJECT_SOURCE_DIR}/bin/resources/GameIndex.yaml"
 )
 
 set(multi_isa_sources
