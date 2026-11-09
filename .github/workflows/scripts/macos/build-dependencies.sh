@@ -94,7 +94,7 @@ e156be0bd81c8812f1bff8e520422bfa9df61b3045587b9eb483185f1074a7b2  shaderc-spirv-
 EOF
 
 if ! shasum -sa 256 --check SHASUMS 2> /dev/null; then
-	curl -L \
+	curl -L --retry 5 --retry-delay 10 --retry-all-errors --connect-timeout 30 \
 		-O "https://sourceforge.net/projects/freetype/files/freetype2/$FREETYPE/freetype-$FREETYPE.tar.xz" \
 		-O "https://github.com/harfbuzz/harfbuzz/archive/$HARFBUZZ/harfbuzz-$HARFBUZZ.tar.gz" \
 		-O "https://libsdl.org/release/$SDL.tar.gz" \
