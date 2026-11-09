@@ -33,13 +33,19 @@ on:
         required: false
         type: boolean
         default: false
+      # Fork releases ship the arm64 build, ad-hoc signed (no Apple secrets), see fork_release.yml.
+      fork_release:
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build_macos:
     name: ${{ inputs.jobName }}
     runs-on: ${{ inputs.os }}
     # Set some sort of timeout in the event of run-away builds.  We are limited on concurrent jobs so, get rid of them.
-    timeout-minutes: 120
+    # Fork releases are tag builds, which can't reuse an earlier tag's cache, so they often build the deps from scratch.
+    timeout-minutes: ${{ inputs.fork_release && 240 || 120 }}
     env:
       POWERSHELL_TELEMETRY_OPTOUT: 1
       CCACHE_BASEDIR: ${{ github.workspace }}
@@ -162,7 +168,7 @@ jobs:
 
       - name: Run Tests
         working-directory: build
-        run: make -j$(getconf _NPROCESSORS_ONLN) unittests
+        run: PCSX2_LIBRASHADER_PATH="$HOME/deps/lib/librashader.dylib" make -j$(getconf _NPROCESSORS_ONLN) unittests
 
       - name: Clean Caches
         run: |
@@ -202,8 +208,15 @@ jobs:
           # passing the issuer id, key, etc through arguments.
           app_store_connect_api_key_json_file: 'key.json'
 
+      # macdeployqt's own signing fails without an identity, and arm64 apps must be signed to launch.
+      - name: Ad-hoc Sign the Application
+        if: inputs.fork_release
+        run: |
+          codesign --force --deep --sign - PCSX2.app
+          codesign --verify --deep --strict --verbose=2 PCSX2.app
+
       - name: Zip Build Artifacts
-        if: inputs.arch == 'x86-64'
+        if: inputs.arch == 'x86-64' || inputs.fork_release
         run: |
           TAG="$(git tag --points-at HEAD)"
           if [ -z "$TAG" ]; then
@@ -217,7 +230,7 @@ jobs:
           cp "${{ steps.artifact-metadata.outputs.artifact-name }}.tar.xz" ci-artifacts/macOS.tar.xz
 
       - name: Upload Artifact
-        if: inputs.arch == 'x86-64'
+        if: inputs.arch == 'x86-64' || inputs.fork_release
         uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.artifact-metadata.outputs.artifact-name }}

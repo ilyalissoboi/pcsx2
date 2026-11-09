@@ -156,6 +156,7 @@ jobs:
         run: |
           call "%VCVARSPATH%" || exit /b
           set PATH=%PATH%;%GITHUB_WORKSPACE%\bin
+          set PCSX2_LIBRASHADER_PATH=%GITHUB_WORKSPACE%\bin\librashader.dll
           cmake --build build --config Release --target unittests
 
       - name: Upload artifact
