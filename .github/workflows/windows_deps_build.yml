@@ -11,13 +11,17 @@ on:
         required: false
         type: string
         default: x64
+      timeoutMinutes:
+        required: false
+        type: number
+        default: 90
 
 jobs:
   build_windows_deps:
     name: "Cache Dependencies"
     runs-on: ${{ inputs.os }}
     # Set some sort of timeout in the event of run-away builds.  We are limited on concurrent jobs so, get rid of them.
-    timeout-minutes: 90
+    timeout-minutes: ${{ inputs.timeoutMinutes }}
     env:
       POWERSHELL_TELEMETRY_OPTOUT: 1
 

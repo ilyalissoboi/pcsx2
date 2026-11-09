@@ -1,0 +1,25 @@
+{
+  "name": "librashader",
+  "buildsystem": "simple",
+  "build-options": {
+    "append-path": "/usr/lib/sdk/rust-stable/bin",
+    "build-args": [
+      "--share=network"
+    ],
+    "env": {
+      "CARGO_HOME": "/run/build/librashader/cargo"
+    }
+  },
+  "build-commands": [
+    "cargo build -p librashader-capi --profile optimized --no-default-features --features runtime-vulkan",
+    "install -Dm755 target/optimized/liblibrashader_capi.so \"${FLATPAK_DEST}/bin/librashader.so\""
+  ],
+  "sources": [
+    {
+      "type": "git",
+      "url": "https://github.com/SnowflakePowered/librashader.git",
+      "tag": "librashader-v0.12.0",
+      "commit": "87e8a97b50516d997defeaa168173dcd185d4022"
+    }
+  ]
+}

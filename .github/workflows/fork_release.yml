@@ -1,0 +1,87 @@
+# Fork-only release flow, the same as the PPSSPP fork: pushing a version tag (v<upstream>-scN) builds
+# the packages on hosted runners and publishes the GitHub release. No secrets beyond the built-in token.
+#
+# Needs proper testing: the first real tag is the first full run of this workflow.
+
+name: 🍴 Fork Release
+
+on:
+  push:
+    tags:
+      - "v*-sc*"
+
+permissions:
+  contents: read
+
+jobs:
+  # fetchTags isn't needed: the pushed tag is already checked out, and it's the only tag the build uses.
+  build_windows_deps:
+    name: "Windows Dependencies"
+    uses: ./.github/workflows/windows_deps_build.yml
+    with:
+      timeoutMinutes: 180
+
+  build_windows:
+    needs: build_windows_deps
+    name: "Windows"
+    uses: ./.github/workflows/windows_build_qt.yml
+    with:
+      jobName: "Windows Build"
+      artifactPrefixName: "PCSX2-windows-Qt-x64"
+      configuration: CMake
+      buildSystem: cmake
+      cmakeFlags: -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl
+
+  # arm64, not upstream's x86-64 release job: the x86-64 deps script doesn't build librashader.
+  build_macos:
+    name: "MacOS"
+    uses: ./.github/workflows/macos_build.yml
+    with:
+      jobName: "MacOS arm64 Build"
+      artifactPrefixName: "PCSX2-macos-Qt-arm64"
+      arch: arm64
+      fork_release: true
+
+  # The manifest itself fails the build if librashader or emusync is missing from the bundle.
+  # Needs proper testing: the shader chain has not been exercised on Linux before this build.
+  build_linux_flatpak:
+    name: "Linux"
+    uses: ./.github/workflows/linux_build_flatpak.yml
+    with:
+      jobName: "Flatpak Build"
+      artifactPrefixName: "PCSX2-linux-Qt-x64-flatpak"
+      compiler: clang
+      cmakeflags: ""
+
+  publish:
+    needs:
+      - build_windows
+      - build_macos
+      - build_linux_flatpak
+    name: "Publish Release"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download all Artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: ./ci-artifacts/
+
+      - name: Verify and Package the Release Assets
+        env:
+          TAG_VAL: ${{ github.ref_name }}
+          SCAN_DIR: ${{ github.workspace }}/ci-artifacts
+          OUT_DIR: ${{ github.workspace }}/ci-artifacts/out
+          NOTES_FILE: ${{ github.workspace }}/release-notes.md
+        run: bash ./.github/workflows/scripts/releases/prepare-fork-release.sh
+
+      - name: Publish the Release
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda
+        with:
+          name: PCSX2 ${{ github.ref_name }} (shader chain, memory card sync)
+          body_path: ./release-notes.md
+          files: ./ci-artifacts/out/*
+          fail_on_unmatched_files: true

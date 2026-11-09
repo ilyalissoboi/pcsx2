@@ -9,6 +9,7 @@
 #include "common/MemorySettingsInterface.h"
 #include "common/Path.h"
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <filesystem>
 #include <string>
 
@@ -148,6 +149,8 @@ TEST(ShaderChainParams, ApplyOverridesToStorePushesParsedListForPreset)
 	const u64 gen1 = ShaderPresets::Params().Snapshot(&preset, &params);
 	EXPECT_EQ(preset, "shaders_slang/crt/x.slangp");
 	ASSERT_EQ(params.size(), 2u);
+	// MemorySettingsInterface keeps lists in an unordered multimap, and libstdc++ returns them reversed.
+	std::sort(params.begin(), params.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
 	EXPECT_EQ(params[0].first, "GAMMA");
 	EXPECT_FLOAT_EQ(params[0].second, 2.4f);
 	EXPECT_EQ(params[1].first, "SIZE");
