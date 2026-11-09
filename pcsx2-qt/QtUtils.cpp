@@ -830,8 +830,10 @@ namespace QtUtils
 		{
 			if (is_flatpak) // Flatpak
 			{
-				executable_path = "flatpak run net.pcsx2.PCSX2";
-				icon_name = "net.pcsx2.PCSX2";
+				// Forks ship under their own app ID, so ask the sandbox instead of hard-coding it.
+				const char* flatpak_id = std::getenv("FLATPAK_ID");
+				icon_name = (flatpak_id && flatpak_id[0] != '\0') ? flatpak_id : "net.pcsx2.PCSX2";
+				executable_path = fmt::format("flatpak run {}", icon_name);
 			}
 			else
 			{

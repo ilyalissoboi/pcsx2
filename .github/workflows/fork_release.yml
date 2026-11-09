@@ -14,8 +14,7 @@ permissions:
   contents: read
 
 jobs:
-  # fetchTags is left off on purpose: the pushed tag is already checked out, and fetching tags over it
-  # fails on annotated tags ("would clobber existing tag").
+  # fetchTags isn't needed: the pushed tag is already checked out, and it's the only tag the build uses.
   build_windows_deps:
     name: "Windows Dependencies"
     uses: ./.github/workflows/windows_deps_build.yml
@@ -43,10 +42,22 @@ jobs:
       arch: arm64
       fork_release: true
 
+  # The manifest itself fails the build if librashader or emusync is missing from the bundle.
+  # Needs proper testing: the shader chain has not been exercised on Linux before this build.
+  build_linux_flatpak:
+    name: "Linux"
+    uses: ./.github/workflows/linux_build_flatpak.yml
+    with:
+      jobName: "Flatpak Build"
+      artifactPrefixName: "PCSX2-linux-Qt-x64-flatpak"
+      compiler: clang
+      cmakeflags: ""
+
   publish:
     needs:
       - build_windows
       - build_macos
+      - build_linux_flatpak
     name: "Publish Release"
     runs-on: ubuntu-latest
     permissions:
