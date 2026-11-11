@@ -1,6 +1,11 @@
 # Fork-only release flow, the same as the PPSSPP fork: pushing a version tag (v<upstream>-scN) builds
 # the packages on hosted runners and publishes the GitHub release. No secrets beyond the built-in token.
 #
+# Like the PPSSPP fork, macOS doesn't hold back the release: macOS arm64 runners are often short, and a
+# job that gets none is cancelled after about 15 minutes. The release goes out with Windows and Flatpak,
+# and publish_macos adds the macOS package once it's built. If build_macos fails, "Re-run failed jobs"
+# retries just it and publish_macos.
+#
 # Needs proper testing: the first real tag is the first full run of this workflow.
 
 name: 🍴 Fork Release
@@ -56,7 +61,6 @@ jobs:
   publish:
     needs:
       - build_windows
-      - build_macos
       - build_linux_flatpak
     name: "Publish Release"
     runs-on: ubuntu-latest
@@ -65,14 +69,23 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Download all Artifacts
+      # Only these two: the macOS artifact may already exist, and publish_macos handles it.
+      - name: Download the Windows Artifacts
         uses: actions/download-artifact@v8
         with:
+          pattern: PCSX2-windows-*
+          path: ./ci-artifacts/
+
+      - name: Download the Flatpak Artifact
+        uses: actions/download-artifact@v8
+        with:
+          pattern: PCSX2-linux-*
           path: ./ci-artifacts/
 
       - name: Verify and Package the Release Assets
         env:
           TAG_VAL: ${{ github.ref_name }}
+          PLATFORMS: windows flatpak
           SCAN_DIR: ${{ github.workspace }}/ci-artifacts
           OUT_DIR: ${{ github.workspace }}/ci-artifacts/out
           NOTES_FILE: ${{ github.workspace }}/release-notes.md
@@ -85,3 +98,45 @@ jobs:
           body_path: ./release-notes.md
           files: ./ci-artifacts/out/*
           fail_on_unmatched_files: true
+
+  # Adding an asset to a published release only works while the repo's "immutable releases" setting is off.
+  # Needs proper testing: this two-step publish hasn't run on a real tag yet.
+  publish_macos:
+    needs:
+      - build_macos
+      - publish
+    name: "Add macOS to the Release"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG_VAL: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download the macOS Artifact
+        uses: actions/download-artifact@v8
+        with:
+          pattern: PCSX2-macos-*
+          path: ./ci-artifacts/
+
+      # The notes list every package with its checksum, so they're rebuilt from the published files.
+      - name: Download the Published Assets
+        run: |
+          gh release download "$TAG_VAL" --repo "$GITHUB_REPOSITORY" --dir ./ci-artifacts/out \
+            --pattern "pcsx2-$TAG_VAL-windows-x64-Qt.7z" --pattern "pcsx2-$TAG_VAL-linux-flatpak-x64-Qt.flatpak"
+
+      - name: Verify and Package the macOS Asset
+        env:
+          PLATFORMS: macos
+          SCAN_DIR: ${{ github.workspace }}/ci-artifacts
+          OUT_DIR: ${{ github.workspace }}/ci-artifacts/out
+          NOTES_FILE: ${{ github.workspace }}/release-notes.md
+        run: bash ./.github/workflows/scripts/releases/prepare-fork-release.sh
+
+      # --clobber, so a re-run replaces the asset instead of failing on it.
+      - name: Add the macOS Asset to the Release
+        run: |
+          gh release upload "$TAG_VAL" "./ci-artifacts/out/pcsx2-$TAG_VAL-macos-Qt.tar.xz" --repo "$GITHUB_REPOSITORY" --clobber
+          gh release edit "$TAG_VAL" --repo "$GITHUB_REPOSITORY" --notes-file ./release-notes.md
